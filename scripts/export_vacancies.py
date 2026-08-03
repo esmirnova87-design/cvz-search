@@ -84,12 +84,40 @@ def main():
         food_raw = norm(row.get("Питание")).lower()
         housing = norm(row.get("Проживание"))
         dol = norm(row.get("Должность"))
-        obj = norm(row.get("Объект"))
+        for_max = norm(row.get("для МАКС"))
 
         dol_parts = [x.strip() for x in re.split(r"[\n/;]+", dol) if x.strip()]
+        # убрать хвосты вида "уборщица 2"
+        dol_parts = [re.sub(r"\s+\d+$", "", p).strip() for p in dol_parts if p.strip()]
         dol_one = "/".join(dol_parts)
-        obj_one = ", ".join([x.strip() for x in obj.splitlines() if x.strip()])
-        title = f"{dol_one} на {obj_one}" if dol_one and obj_one else (dol_one or obj_one)
+
+        # Название для витрины — ТОЛЬКО из «для МАКС» (строка с 📍), не из «Объект»
+        max_place = ""
+        if for_max:
+            lines = [ln.strip() for ln in for_max.splitlines() if ln.strip()]
+            pin = next((ln for ln in lines if "📍" in ln), None)
+            if not pin:
+                # первая строка без ссылок и без ✅🔥
+                pin = next(
+                    (
+                        ln
+                        for ln in lines
+                        if not ln.startswith("http")
+                        and not ln.startswith("✅")
+                        and not ln.startswith("🔥")
+                    ),
+                    "",
+                )
+            max_place = pin.replace("📍", "").strip()
+            max_place = re.sub(r"https?://\S+", "", max_place).strip()
+            max_place = re.sub(r"\s+", " ", max_place).strip(" ·,-")
+
+        if dol_one and max_place:
+            title = f"{dol_one} на {max_place[0].lower() + max_place[1:] if len(max_place) > 1 else max_place.lower()}"
+        elif max_place:
+            title = max_place
+        else:
+            title = dol_one
         title = re.sub(r"\s+", " ", title).strip(" ·,-")
 
         try:
