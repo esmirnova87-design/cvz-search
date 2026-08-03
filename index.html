@@ -434,7 +434,7 @@
       "Орловская", "Пензенская", "Пермская", "Республика Башкортостан",
       "Республика Саха (Якутия)", "Рязанская", "Свердловская", "Смоленская",
       "Татарстан", "Тверская", "Тульская", "Челябинская", "Чувашия", "Ярославская"
-    ].sort((a, b) => a.localeCompare(b, "ru"));
+    ].slice().sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
 
     const objectTypes = [
       { id: "пищ", label: "Пищевое производство" },
@@ -474,8 +474,7 @@
 Ставка: до 5170 руб/смена
 График: 20/30/35 смен, 6/1, 7/0, день/ночь
 Питание: да
-Проживание: бесплатное
-Потребность: 40М`
+Проживание: бесплатное`
       },
       {
         role: "упаковщик на производство косметики, Раменское",
@@ -531,20 +530,32 @@
       showToast("Скопировано для пересылки");
     }
 
-    function renderCheckList(container, items, { checked = [], valueKey = null } = {}) {
+    function renderCheckList(container, items, { checked = [], prefix = "" } = {}) {
       container.innerHTML = items.map((item, idx) => {
         const value = typeof item === "string" ? item : item.id;
         const label = typeof item === "string" ? item : item.label;
         const isChecked = checked.includes(value);
-        const id = `${container.id}_${idx}`;
+        const id = `${container.id}_${prefix}${idx}`;
         return `<label class="check"><input type="checkbox" id="${id}" value="${value}" ${isChecked ? "checked" : ""} /> ${label}</label>`;
       }).join("");
     }
 
     function fillFilters() {
-      renderCheckList(document.getElementById("regionBox"), [...priorityRegions, ...otherRegions], {
-        checked: ["Московская"]
-      });
+      const regionBox = document.getElementById("regionBox");
+      const top = priorityRegions.map((r, idx) => {
+        const checked = r === "Московская" ? "checked" : "";
+        return `<label class="check"><input type="checkbox" id="region_top_${idx}" value="${r}" ${checked} /> ${r}</label>`;
+      }).join("");
+      const restSorted = otherRegions.slice().sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
+      const rest = restSorted.map((r, idx) => {
+        return `<label class="check"><input type="checkbox" id="region_az_${idx}" value="${r}" /> ${r}</label>`;
+      }).join("");
+      regionBox.innerHTML = `
+        <div class="hint" style="margin:0 0 6px">Часто выбирают</div>
+        ${top}
+        <div class="hint" style="margin:10px 0 6px">Все регионы (А–Я)</div>
+        ${rest}
+      `;
       renderCheckList(document.getElementById("typeBox"), objectTypes);
     }
 
