@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЦВЗ — поиск вахты и работы рядом с домом</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root, html[data-theme="dark"] {
+      --navy: #072139;
+      --red: #f11c23;
+      --red-hover: #ff2e35;
+      --bg: linear-gradient(165deg, #072139, #0b2f4d 48%, #051828);
+      --bg-spot-1: rgba(241, 28, 35, 0.18);
+      --bg-spot-2: rgba(255, 255, 255, 0.08);
+      --text: #ffffff;
+      --muted: #9db0c2;
+      --line: rgba(255, 255, 255, 0.14);
+      --surface: rgba(255, 255, 255, 0.06);
+      --surface-2: rgba(255, 255, 255, 0.1);
+      --input-bg: rgba(5, 24, 40, 0.85);
+      --accent-soft: #ffd0d2;
+      --pay: #ffd6d8;
+      --ok: #7dcea0;
+      --heading: #ffb4b7;
+      --logo-ring: rgba(255,255,255,0.25);
+      --modal-bg: linear-gradient(180deg, #123a58, #072139);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      --check-box-bg: rgba(5, 24, 40, 0.55);
+      --theme-btn-bg: rgba(255,255,255,0.08);
+    }
+
+    html[data-theme="light"] {
+      --bg: linear-gradient(165deg, #f4f7fb, #e8eef5 50%, #f7f9fc);
+      --bg-spot-1: rgba(241, 28, 35, 0.08);
+      --bg-spot-2: rgba(7, 33, 57, 0.06);
+      --text: #072139;
+      --muted: #5a6f84;
+      --line: rgba(7, 33, 57, 0.12);
+      --surface: #ffffff;
+      --surface-2: #f3f6fa;
+      --input-bg: #ffffff;
+      --accent-soft: #a11a1f;
+      --pay: #c4161c;
+      --ok: #1f7a4a;
+      --heading: #072139;
+      --logo-ring: rgba(7, 33, 57, 0.15);
+      --modal-bg: #ffffff;
+      --shadow: 0 14px 40px rgba(7, 33, 57, 0.1);
+      --check-box-bg: #f7f9fc;
+      --theme-btn-bg: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "Manrope", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 480px at 8% -8%, var(--bg-spot-1), transparent 55%),
+        radial-gradient(800px 420px at 100% 0%, var(--bg-spot-2), transparent 45%),
+        var(--bg);
+      background-attachment: fixed;
+      transition: color 0.25s ease;
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 22px 0 72px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 22px;
+      animation: rise 0.55s ease both;
+    }
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .theme-toggle {
+      border: 1px solid var(--line);
+      background: var(--theme-btn-bg);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    .logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 2px var(--logo-ring), 0 10px 30px rgba(0,0,0,0.2);
+      background: #072139 center/cover no-repeat;
+      background-image: url("logo-cvz.png");
+    }
+
+    .hero-text h1 {
+      font-family: "Unbounded", system-ui, sans-serif;
+      font-size: clamp(1.35rem, 3.2vw, 2rem);
+      line-height: 1.15;
+      margin: 0 0 6px;
+      font-weight: 500;
+    }
+    .hero-text h1 .sub {
+      display: inline;
+      font-size: 0.55em;
+      font-weight: 500;
+      color: var(--accent-soft);
+      letter-spacing: 0;
+    }
+    .hero-text p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 40rem;
+      font-size: 0.98rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .logo { width: 60px; height: 60px; }
+      .topbar { flex-wrap: wrap; }
+      .topbar-right { margin-left: 0; width: 100%; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      animation: rise 0.65s ease both;
+    }
+
+    .filters { padding: 16px; position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; }
+    .filters h2, .results-head h2 {
+      font-family: "Unbounded", system-ui, sans-serif;
+      font-size: 0.92rem;
+      margin: 0 0 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--heading);
+    }
+
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    label.lbl {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    select, input, button { font: inherit; color: var(--text); }
+    select, input[type="number"], input[type="text"], input[type="tel"] {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    select:focus, input:focus {
+      border-color: rgba(241, 28, 35, 0.7);
+      box-shadow: 0 0 0 3px rgba(241, 28, 35, 0.18);
+    }
+
+    .hint { font-size: 0.75rem; color: var(--muted); margin-top: -4px; margin-bottom: 10px; }
+
+    .check-grid {
+      display: grid;
+      gap: 6px;
+      max-height: 180px;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--check-box-bg);
+      margin-bottom: 12px;
+    }
+    .check-grid.compact { max-height: none; }
+    .check-grid.jobs { max-height: 150px; }
+
+    .check {
+      display: flex; gap: 8px; align-items: flex-start;
+      font-size: 0.9rem;
+      line-height: 1.3;
+    }
+    .check input { accent-color: var(--red); width: 16px; height: 16px; margin-top: 2px; flex: 0 0 auto; }
+
+    .checks-simple { display: grid; gap: 8px; margin: 2px 0 14px; }
+
+    .people { display: grid; gap: 10px; margin: 6px 0 14px; }
+    .person {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      animation: rise 0.3s ease both;
+    }
+    .person-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px; font-weight: 700; font-size: 0.95rem;
+    }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .linkish {
+      background: none; border: none; color: var(--red); cursor: pointer; padding: 0; font-size: 0.82rem;
+    }
+
+    .docs-line {
+      display: none;
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px dashed rgba(241, 28, 35, 0.45);
+      background: rgba(241, 28, 35, 0.06);
+    }
+    .docs-line.show { display: block; }
+
+    .actions { display: grid; gap: 8px; }
+    .btn {
+      border: none; border-radius: 12px; padding: 12px 14px;
+      cursor: pointer; font-weight: 700; transition: 0.15s ease;
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--red); color: #fff; }
+    .btn-primary:hover { background: var(--red-hover); }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--line); color: var(--text); font-weight: 600;
+    }
+    .btn-ghost:hover { background: var(--surface-2); }
+    .btn-sm { padding: 9px 12px; border-radius: 10px; font-size: 0.86rem; }
+
+    .results-head {
+      display: flex; justify-content: space-between; align-items: end; gap: 12px;
+      margin-bottom: 12px; animation: rise 0.6s ease both;
+    }
+    .count { color: var(--muted); font-size: 0.9rem; text-align: right; max-width: 24rem; line-height: 1.35; }
+    .count em { font-style: normal; color: var(--red); }
+
+    .cards { display: grid; gap: 12px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      animation: rise 0.45s ease both;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: rgba(241, 28, 35, 0.55); transform: translateY(-2px); }
+
+    .card-top { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .role {
+      font-family: "Unbounded", system-ui, sans-serif; font-size: 1.02rem; font-weight: 500; margin: 0 0 4px; line-height: 1.25;
+    }
+    .place { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .pay { text-align: right; white-space: nowrap; }
+    .pay strong {
+      display: block; font-size: 1.22rem; color: var(--pay);
+      font-family: "Unbounded", system-ui, sans-serif; font-weight: 500;
+    }
+    .pay span { color: var(--muted); font-size: 0.78rem; }
+
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .chip {
+      border: 1px solid var(--line); background: var(--surface-2);
+      border-radius: 999px; padding: 5px 10px; font-size: 0.78rem;
+    }
+    .chip.ok { border-color: rgba(31, 122, 74, 0.35); color: var(--ok); }
+
+    .duty { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+    html[data-theme="dark"] .duty { color: #d7e2ec; }
+    .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .bottom-bar { margin-top: 14px; display: flex; justify-content: flex-end; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 24px;
+      transform: translateX(-50%) translateY(16px);
+      background: var(--surface); border: 1px solid rgba(125, 206, 160, 0.45);
+      color: var(--ok); padding: 10px 16px; border-radius: 999px;
+      opacity: 0; pointer-events: none; transition: 0.25s ease; z-index: 40;
+      box-shadow: var(--shadow);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(2, 10, 18, 0.55);
+      display: none; align-items: center; justify-content: center;
+      padding: 20px; z-index: 50;
+    }
+    .modal-backdrop.show { display: flex; }
+    .modal {
+      width: min(440px, 100%);
+      background: var(--modal-bg);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      color: var(--text);
+    }
+    .modal h3 {
+      margin: 0 0 6px; font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 1.05rem;
+    }
+    .modal p { margin: 0 0 14px; color: var(--muted); font-size: 0.92rem; line-height: 1.4; }
+    .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .yn { display: grid; gap: 8px; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="logo" role="img" aria-label="ЦВЗ"></div>
+      <div class="hero-text">
+        <h1>ЦВЗ — поиск вахты <span class="sub">(и работы рядом с домом)</span></h1>
+        <p>Все актуальные вакансии в одном окне. Выберите параметры — система покажет подходящие варианты.</p>
+      </div>
+      <div class="topbar-right">
+        <button type="button" class="theme-toggle" id="themeToggle">Светлая тема</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="panel filters">
+        <h2>Параметры поиска</h2>
+
+        <div class="field" style="margin-bottom:6px">
+          <label class="lbl">Регион</label>
+        </div>
+        <div class="check-grid" id="regionBox"></div>
+
+        <div class="checks-simple">
+          <label class="check"><input type="checkbox" id="housing" checked /> Нужно проживание</label>
+          <label class="check"><input type="checkbox" id="food" checked /> Нужно питание</label>
+          <label class="check"><input type="checkbox" id="noSb" /> Без СБ</label>
+          <label class="check"><input type="checkbox" id="noMed" /> Без медкнижки</label>
+        </div>
+
+        <div class="field" style="margin-bottom:6px">
+          <label class="lbl">Тип объекта</label>
+        </div>
+        <div class="check-grid compact" id="typeBox"></div>
+
+        <div class="people" id="people"></div>
+
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" id="addPerson">+ ещё один</button>
+          <button type="button" class="btn btn-primary" id="searchBtn">Показать варианты</button>
+        </div>
+      </aside>
+
+      <main>
+        <div class="results-head">
+          <h2>Подходящие вакансии</h2>
+          <div class="count" id="countLabel"></div>
+        </div>
+        <div class="cards" id="cards"></div>
+        <div class="bottom-bar">
+          <button type="button" class="btn btn-ghost" id="copyAll">Скопировать все</button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="docsModal">
+    <div class="modal">
+      <h3>Документы</h3>
+      <p>Вы выбрали гражданство не РФ. Все документы в наличии?</p>
+      <div class="yn">
+        <label class="check"><input type="radio" name="docsHave" value="yes" /> Да</label>
+        <label class="check"><input type="radio" name="docsHave" value="no" /> Нет</label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="docsCancel">Отмена</button>
+        <button type="button" class="btn btn-primary" id="docsOk">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="applyModal">
+    <div class="modal">
+      <h3>Откликнуться</h3>
+      <p>Оставьте ФИО и телефон — создадим отклик в Битрикс.</p>
+      <div class="field">
+        <label class="lbl" for="fio">ФИО</label>
+        <input id="fio" type="text" placeholder="Иванов Иван Иванович" />
+      </div>
+      <div class="field">
+        <label class="lbl" for="phone">Телефон</label>
+        <input id="phone" type="tel" placeholder="+7 999 999 99 99" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="applyCancel">Отмена</button>
+        <button type="button" class="btn btn-primary" id="applySend">Отправить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Скопировано</div>
+
+  <script>
+    const MAX_CHAT = "https://max.ru/u/f9LHodD0cOJBDYiotyrlreRMBF60M4RCvreUWboUCVHdIqZOr7cTrxnzuuU";
+    const TOTAL_IN_BASE = 453;
+
+    const priorityRegions = ["Москва", "Московская", "Санкт-Петербург", "Ленинградская"];
+    const otherRegions = [
+      "Владимирская", "Вологодская", "Воронежская", "Калужская", "Краснодарский край",
+      "Красноярский край", "Липецкая", "Мордовия", "Нижегородская", "Новгородская",
+      "Орловская", "Пензенская", "Пермская", "Республика Башкортостан",
+      "Республика Саха (Якутия)", "Рязанская", "Свердловская", "Смоленская",
+      "Татарстан", "Тверская", "Тульская", "Челябинская", "Чувашия", "Ярославская"
+    ].sort((a, b) => a.localeCompare(b, "ru"));
+
+    const objectTypes = [
+      { id: "пищ", label: "Пищевое производство" },
+      { id: "не пищ", label: "Не пищевое производство" },
+      { id: "склад", label: "Склад" },
+      { id: "отель", label: "Отель / санаторий" },
+      { id: "стройка", label: "Стройка" },
+      { id: "тепл", label: "Теплицы" },
+      { id: "ТТ", label: "Торговая точка" },
+      { id: "ферма", label: "Ферма" }
+    ];
+
+    const jobsM = [
+      "грузчик", "разнорабочий", "комплектовщик", "комплектовщик с ТСД", "упаковщик",
+      "сборщик", "оператор линии", "фасовщик", "укладчик", "мойщик", "транспортировщик",
+      "работник склада", "водитель ВЭШ", "водитель ВАП", "водитель ричтрака",
+      "водитель погрузчика", "водитель штабелера", "подсобный рабочий", "слесарь",
+      "повар", "уборщик", "маркировщик"
+    ];
+
+    const jobsF = [
+      "упаковщица", "упаковщик", "комплектовщик", "комплектовщик с ТСД", "оператор линии",
+      "фасовщица", "уборщица", "мойщица", "горничная", "повар", "помощник повара",
+      "маркировщица", "стикеровщица", "сортировщица", "швея", "официант", "работник линии"
+    ];
+
+    const demo = [
+      {
+        role: "комплектовщик/грузчик на склад хлебокомбината, Подольск",
+        place: "Московская · склад · вахта от 20",
+        pay: "5170",
+        photo: "https://max.ru/c/-72812863916033/AZ0_tbPUaqA",
+        chips: ["питание", "проживание", "СБ есть", "6/1, 7/0"],
+        duty: "Отбор и комплектация заказов, погрузка/разгрузка, перемещение грузов по складу.",
+        copy: `ЦВЗ | комплектовщик/грузчик на склад хлебокомбината, Подольск
+Регион: Московская
+Ставка: до 5170 руб/смена
+График: 20/30/35 смен, 6/1, 7/0, день/ночь
+Питание: да
+Проживание: бесплатное
+Потребность: 40М`
+      },
+      {
+        role: "упаковщик на производство косметики, Раменское",
+        place: "Московская · пищевое · вахта от 30",
+        pay: "3465",
+        photo: "https://disk.yandex.ru/d/y35AXvlk9T591A",
+        chips: ["питание", "проживание", "семейные", "СБ есть"],
+        duty: "Упаковка, фасовка, маркировка. На объекте есть позиции и для мужчин.",
+        copy: `ЦВЗ | упаковщик на производство косметики, Раменское
+Регион: Московская
+Ставка: до 3465 руб/смена
+График: от 30 смен, 6/1, день/ночь
+Питание: да
+Проживание: предоставляется`
+      },
+      {
+        role: "разнорабочий на производство полуфабрикатов, Владимир",
+        place: "Владимирская · пищевое · вахта от 30",
+        pay: "4004",
+        photo: "https://max.ru/c/-72812863916033/AZ0_461",
+        chips: ["питание", "проживание", "ближайший регион"],
+        duty: "Упаковка, подготовка сырья, уборка, транспортировка на пищевом производстве.",
+        copy: `ЦВЗ | разнорабочий на производство полуфабрикатов, Владимир
+Регион: Владимирская
+Ставка: до 4004 руб/смена
+График: от 30 смен, 6/1, день/ночь
+Питание: да
+Проживание: предоставляется`
+      }
+    ];
+
+    const peopleEl = document.getElementById("people");
+    const cardsEl = document.getElementById("cards");
+    const toast = document.getElementById("toast");
+    const docsModal = document.getElementById("docsModal");
+    const applyModal = document.getElementById("applyModal");
+    let personSeq = 0;
+    let pendingCitizenPerson = null;
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 1600);
+    }
+
+    async function copyText(text) {
+      try { await navigator.clipboard.writeText(text); }
+      catch (_) {
+        const ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); ta.remove();
+      }
+      showToast("Скопировано для пересылки");
+    }
+
+    function renderCheckList(container, items, { checked = [], valueKey = null } = {}) {
+      container.innerHTML = items.map((item, idx) => {
+        const value = typeof item === "string" ? item : item.id;
+        const label = typeof item === "string" ? item : item.label;
+        const isChecked = checked.includes(value);
+        const id = `${container.id}_${idx}`;
+        return `<label class="check"><input type="checkbox" id="${id}" value="${value}" ${isChecked ? "checked" : ""} /> ${label}</label>`;
+      }).join("");
+    }
+
+    function fillFilters() {
+      renderCheckList(document.getElementById("regionBox"), [...priorityRegions, ...otherRegions], {
+        checked: ["Московская"]
+      });
+      renderCheckList(document.getElementById("typeBox"), objectTypes);
+    }
+
+    function jobsForGender(g) { return g === "Ж" ? jobsF : jobsM; }
+
+    function refreshJobs(person) {
+      const gender = person.querySelector("[data-gender]").value;
+      const box = person.querySelector("[data-jobs]");
+      const prev = [...box.querySelectorAll("input:checked")].map(i => i.value);
+      renderCheckList(box, jobsForGender(gender), { checked: prev });
+    }
+
+    function setDocsLine(person, state) {
+      const line = person.querySelector("[data-docs-line]");
+      const citizen = person.querySelector("[data-citizen]").value;
+      const show = citizen !== "Россия";
+      line.classList.toggle("show", show);
+      const cb = line.querySelector("input");
+      if (!show) {
+        cb.checked = false;
+        cb.indeterminate = false;
+        person.dataset.docs = "";
+        return;
+      }
+      if (state === "yes") {
+        cb.checked = true;
+        cb.indeterminate = false;
+        person.dataset.docs = "yes";
+      } else if (state === "no") {
+        cb.checked = false;
+        cb.indeterminate = false;
+        person.dataset.docs = "no";
+      } else {
+        cb.checked = false;
+        cb.indeterminate = true;
+        person.dataset.docs = "";
+      }
+    }
+
+    function openDocsModal(person) {
+      pendingCitizenPerson = person;
+      docsModal.querySelectorAll('input[name="docsHave"]').forEach(r => { r.checked = false; });
+      docsModal.classList.add("show");
+    }
+
+    function addPerson(preset = null) {
+      personSeq += 1;
+      const n = personSeq;
+      const box = document.createElement("div");
+      box.className = "person";
+      box.dataset.docs = "";
+      box.innerHTML = `
+        <div class="person-head">
+          <span>Кто едет: ${n}</span>
+          <button type="button" class="linkish" data-remove>убрать</button>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label class="lbl">Гражданство</label>
+            <select data-citizen>
+              <option>Россия</option>
+              <option>Беларусь</option>
+              <option>Казахстан</option>
+              <option>Киргизия</option>
+              <option>Армения</option>
+              <option>Узбекистан</option>
+              <option>Таджикистан</option>
+              <option>Азербайджан</option>
+              <option>Молдова</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="lbl">Пол</label>
+            <select data-gender>
+              <option>Ж</option>
+              <option>М</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">Возраст</label>
+          <input type="number" data-age min="18" max="70" value="30" />
+        </div>
+        <div class="docs-line" data-docs-line>
+          <label class="check"><input type="checkbox" data-docs-cb /> Все документы в наличии</label>
+        </div>
+        <div class="field" style="margin-bottom:6px">
+          <label class="lbl">Какие вакансии рассматриваем</label>
+        </div>
+        <div class="check-grid jobs" data-jobs></div>
+      `;
+      peopleEl.appendChild(box);
+
+      if (preset) {
+        box.querySelector("[data-citizen]").value = preset.citizen || "Россия";
+        box.querySelector("[data-gender]").value = preset.gender || "Ж";
+        box.querySelector("[data-age]").value = preset.age || 30;
+      }
+
+      refreshJobs(box);
+      if (preset && preset.jobs) {
+        box.querySelectorAll("[data-jobs] input").forEach(inp => {
+          inp.checked = preset.jobs.includes(inp.value);
+        });
+      }
+
+      if (preset && preset.citizen && preset.citizen !== "Россия") {
+        setDocsLine(box, preset.docs || "");
+      }
+
+      const citizenSelect = box.querySelector("[data-citizen]");
+      let lastCitizen = citizenSelect.value;
+      citizenSelect.addEventListener("change", () => {
+        const val = citizenSelect.value;
+        if (val !== "Россия") {
+          openDocsModal(box);
+        } else {
+          setDocsLine(box, null);
+        }
+        lastCitizen = val;
+      });
+
+      box.querySelector("[data-docs-cb]").addEventListener("change", (e) => {
+        box.dataset.docs = e.target.checked ? "yes" : "no";
+        e.target.indeterminate = false;
+      });
+
+      box.querySelector("[data-gender]").addEventListener("change", () => refreshJobs(box));
+      box.querySelector("[data-remove]").addEventListener("click", () => {
+        if (peopleEl.querySelectorAll(".person").length <= 1) return;
+        box.remove();
+      });
+    }
+
+    function renderCount(n) {
+      let msg = `подходят ${n} из базы в ${TOTAL_IN_BASE}`;
+      if (n >= 0 && n <= 5) {
+        msg += ` <em>(измените параметры поиска для большего количества вариантов)</em>`;
+      }
+      document.getElementById("countLabel").innerHTML = msg;
+    }
+
+    function renderCards(list) {
+      renderCount(list.length);
+      cardsEl.innerHTML = list.map((v, i) => `
+        <article class="card" style="animation-delay:${i * 0.05}s">
+          <div class="card-top">
+            <div>
+              <h3 class="role">${v.role}</h3>
+              <p class="place">${v.place}</p>
+            </div>
+            <div class="pay">
+              <strong>${v.pay}</strong>
+              <span>руб / смена</span>
+            </div>
+          </div>
+          <div class="meta">
+            ${v.chips.map(c => `<span class="chip ${/питание|проживание|семей/.test(c) ? "ok" : ""}">${c}</span>`).join("")}
+          </div>
+          <p class="duty">${v.duty}</p>
+          <div class="card-actions">
+            <button class="btn btn-ghost btn-sm" data-copy="${encodeURIComponent(v.copy)}">Скопировать</button>
+            <button class="btn btn-ghost btn-sm" data-more>Подробнее</button>
+            ${v.photo ? `<a class="btn btn-ghost btn-sm" href="${v.photo}" target="_blank" rel="noopener">Фото</a>` : `<button class="btn btn-ghost btn-sm" disabled title="Фото пока нет">Фото</button>`}
+            <button class="btn btn-primary btn-sm" data-apply>Откликнуться</button>
+            <a class="btn btn-ghost btn-sm" href="${MAX_CHAT}" target="_blank" rel="noopener">Задать вопрос в чате</a>
+          </div>
+        </article>
+      `).join("");
+
+      cardsEl.querySelectorAll("[data-copy]").forEach(btn => {
+        btn.addEventListener("click", () => copyText(decodeURIComponent(btn.dataset.copy)));
+      });
+      cardsEl.querySelectorAll("[data-apply]").forEach(btn => {
+        btn.addEventListener("click", () => applyModal.classList.add("show"));
+      });
+      cardsEl.querySelectorAll("[data-more]").forEach(btn => {
+        btn.addEventListener("click", () => showToast("Подробнее — в следующей версии"));
+      });
+    }
+
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      const html = document.documentElement;
+      const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
+      html.setAttribute("data-theme", next);
+      document.getElementById("themeToggle").textContent = next === "light" ? "Тёмная тема" : "Светлая тема";
+    });
+
+    document.getElementById("addPerson").addEventListener("click", () => addPerson({ gender: "М", age: 30 }));
+    document.getElementById("searchBtn").addEventListener("click", () => {
+      renderCards(demo);
+      cardsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    document.getElementById("copyAll").addEventListener("click", () => {
+      copyText(demo.map(v => v.copy).join("\n\n————\n\n"));
+    });
+
+    document.getElementById("docsCancel").addEventListener("click", () => {
+      if (pendingCitizenPerson) {
+        pendingCitizenPerson.querySelector("[data-citizen]").value = "Россия";
+        setDocsLine(pendingCitizenPerson, null);
+      }
+      docsModal.classList.remove("show");
+      pendingCitizenPerson = null;
+    });
+    document.getElementById("docsOk").addEventListener("click", () => {
+      const chosen = docsModal.querySelector('input[name="docsHave"]:checked');
+      if (!chosen) {
+        showToast("Выберите да или нет");
+        return;
+      }
+      if (pendingCitizenPerson) setDocsLine(pendingCitizenPerson, chosen.value);
+      docsModal.classList.remove("show");
+      pendingCitizenPerson = null;
+    });
+
+    document.getElementById("applyCancel").addEventListener("click", () => applyModal.classList.remove("show"));
+    document.getElementById("applySend").addEventListener("click", () => {
+      const fio = document.getElementById("fio").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      if (!fio || !phone) { showToast("Укажите ФИО и телефон"); return; }
+      applyModal.classList.remove("show");
+      showToast("Отклик принят (макет Битрикс)");
+    });
+
+    [docsModal, applyModal].forEach(m => m.addEventListener("click", e => {
+      if (e.target === m) m.classList.remove("show");
+    }));
+
+    fillFilters();
+    addPerson({ citizen: "Россия", gender: "Ж", age: 38, jobs: ["упаковщица", "комплектовщик", "уборщица"] });
+    addPerson({ citizen: "Беларусь", gender: "М", age: 41, jobs: ["грузчик", "комплектовщик", "разнорабочий"], docs: "" });
+    // second person non-RF: show docs line without forced answer until they change citizenship again
+    const p2 = peopleEl.querySelectorAll(".person")[1];
+    setDocsLine(p2, "");
+    renderCards(demo);
+  </script>
+</body>
+</html>

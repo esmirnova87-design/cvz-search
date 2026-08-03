@@ -1,0 +1,4 @@
+﻿data/
+*.xlsx
+_*.txt
+.DS_Store
