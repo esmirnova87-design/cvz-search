@@ -303,6 +303,16 @@ function foodShort(v) {
   return "питание";
 }
 
+function pinIcon() {
+  return L.divIcon({
+    className: "cvz-pin-wrap",
+    html: '<div class="cvz-pin" aria-hidden="true"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    tooltipAnchor: [0, -12]
+  });
+}
+
 function ensureMap() {
   if (mapReady) return true;
   if (typeof L === "undefined") {
@@ -311,13 +321,6 @@ function ensureMap() {
   }
   try {
     map = L.map("map", { scrollWheelZoom: true });
-    if (L.Icon && L.Icon.Default) {
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: "vendor/leaflet/images/marker-icon-2x.png",
-        iconUrl: "vendor/leaflet/images/marker-icon.png",
-        shadowUrl: "vendor/leaflet/images/marker-shadow.png"
-      });
-    }
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
@@ -326,7 +329,9 @@ function ensureMap() {
       mapCluster = L.markerClusterGroup({
         showCoverageOnHover: false,
         maxClusterRadius: 48,
-        spiderfyOnMaxZoom: true
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true,
+        disableClusteringAtZoom: 13
       });
     } else {
       mapCluster = L.layerGroup();
@@ -347,19 +352,21 @@ function renderMap(list) {
   mapCluster.clearLayers();
   const withGeo = list.filter((v) => v.lat != null && v.lng != null);
   const bounds = [];
+  const icon = pinIcon();
   withGeo.forEach((v, idx) => {
     const jitter = ((idx % 7) - 3) * 0.002;
     const lat = Number(v.lat) + jitter * 0.35;
     const lng = Number(v.lng) + jitter;
-    const marker = L.marker([lat, lng]);
+    const marker = L.marker([lat, lng], { icon });
+    const shortTitle = v.title.replace(/\s*\(ID:.*?\)\s*$/, "");
     const tip = `
       <div class="cvz-tooltip">
-        <strong>${escapeHtml(v.title.replace(/\s*\(ID:.*?\)\s*$/, ""))}</strong>
+        <strong>${escapeHtml(shortTitle)}</strong>
         <span class="pay">${escapeHtml(String(v.pay || "—"))} руб/смена</span><br/>
         ${escapeHtml(foodShort(v))}
         ${v.geo_label ? `<br/><span style="opacity:.75">${escapeHtml(v.geo_label)}</span>` : ""}
       </div>`;
-    marker.bindTooltip(tip, { direction: "top", offset: [0, -8], opacity: 0.96 });
+    marker.bindTooltip(tip, { direction: "top", offset: [0, -10], opacity: 0.96, sticky: true });
     marker.on("click", () => openDetailsModal(v.id));
     mapCluster.addLayer(marker);
     bounds.push([lat, lng]);
@@ -368,7 +375,7 @@ function renderMap(list) {
   const miss = list.length - withGeo.length;
   const hint = document.querySelector(".map-hint");
   if (hint) {
-    let msg = "Можно двигать карту и менять масштаб. Наведите на точку — кратко, нажмите — подробнее. Точки — по городу/посёлку, без точного адреса.";
+    let msg = "Клик по красному кружку с цифрой — приблизить. Клик по точке — подробнее. Наведение — кратко (название, ставка, питание). Точки по городу, без точного адреса.";
     if (miss > 0) msg += ` Без точки на карте: ${miss}.`;
     hint.textContent = msg;
   }
