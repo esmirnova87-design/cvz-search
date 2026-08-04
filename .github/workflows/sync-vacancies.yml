@@ -1,0 +1,52 @@
+name: Sync vacancies from Google Sheet
+
+on:
+  workflow_dispatch:
+  schedule:
+    # every hour
+    - cron: "15 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install openpyxl google-auth google-api-python-client
+
+      - name: Write service account (optional)
+        env:
+          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SA_JSON" ]; then
+            mkdir -p secrets
+            printf '%s' "$GOOGLE_SA_JSON" > secrets/google-service-account.json
+            echo "Service account file written"
+          else
+            echo "No GOOGLE_SERVICE_ACCOUNT_JSON secret — will try public link export"
+          fi
+
+      - name: Fetch sheet + export vacancies.json
+        run: |
+          python scripts/fetch_google_sheet.py
+          python scripts/export_vacancies.py --google
+
+      - name: Commit if changed
+        run: |
+          git config user.name "cvz-sync-bot"
+          git config user.email "cvz-sync-bot@users.noreply.github.com"
+          git add vacancies.json data/geo-cache.json || true
+          if git diff --staged --quiet; then
+            echo "No vacancy changes"
+          else
+            git commit -m "chore: sync vacancies from Google Sheet"
+            git push
+          fi

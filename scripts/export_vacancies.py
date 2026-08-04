@@ -17,9 +17,36 @@ import openpyxl
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from geo import geocode, load_cache, save_cache  # noqa: E402
+from fetch_google_sheet import fetch as fetch_google_sheet  # noqa: E402
 
-XLSX = ROOT / "data" / "Для сотрудников подбора.xlsx"
+XLSX_LOCAL = ROOT / "data" / "Для сотрудников подбора.xlsx"
+XLSX_GOOGLE = ROOT / "data" / "google-potrebnost.xlsx"
+CONFIG_PATH = ROOT / "sheets-config.json"
 OUT = ROOT / "vacancies.json"
+
+
+def resolve_workbook_path():
+    """--google: download sheet; else use cached google file or local excel."""
+    if "--google" in sys.argv or "--from-google" in sys.argv:
+        return fetch_google_sheet(XLSX_GOOGLE)
+    if XLSX_GOOGLE.exists():
+        print(f"using cached Google export: {XLSX_GOOGLE}")
+        return XLSX_GOOGLE
+    if XLSX_LOCAL.exists():
+        print(f"using local excel: {XLSX_LOCAL}")
+        return XLSX_LOCAL
+    raise SystemExit(
+        "Нет источника данных. Запустите: python scripts/export_vacancies.py --google\n"
+        "или положите Excel в data/Для сотрудников подбора.xlsx"
+    )
+
+
+def sheet_name():
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        return cfg.get("sheetName") or "ПОТРЕБНОСТЬ1"
+    except Exception:
+        return "ПОТРЕБНОСТЬ1"
 
 FEM_HINTS = (
     "щица",
@@ -337,8 +364,15 @@ def gender_flags(job, m_demand, zh_demand, sp_yes, sp_demand):
 
 
 def main():
-    wb = openpyxl.load_workbook(XLSX, data_only=True)
-    ws = wb["ПОТРЕБНОСТЬ1"]
+    xlsx_path = resolve_workbook_path()
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    name = sheet_name()
+    if name not in wb.sheetnames:
+        # fallback: first sheet containing ПОТРЕБ
+        name = next((s for s in wb.sheetnames if "ПОТРЕБ" in s.upper()), wb.sheetnames[0])
+        print(f"sheet '{sheet_name()}' not found, using '{name}'")
+    ws = wb[name]
+    print(f"reading sheet: {name}")
     headers = [c.value for c in ws[1]]
     while headers and headers[-1] is None:
         headers.pop()
@@ -640,9 +674,10 @@ def main():
             )
 
     save_cache(geo_cache)
-    payload = {"updated": "local-excel", "total": len(vacancies), "items": vacancies}
+    source = "google-sheet" if "--google" in sys.argv or "--from-google" in sys.argv or xlsx_path == XLSX_GOOGLE else "local-excel"
+    payload = {"updated": source, "total": len(vacancies), "items": vacancies}
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"exported {len(vacancies)} cards -> {OUT}")
+    print(f"exported {len(vacancies)} cards -> {OUT} (source={source})")
     print(f"rows split by role: {split_rows}; legacy combined: {legacy_rows}")
     print(f"geo pins: {geo_ok}; missing: {geo_miss}")
     print("short_shift", sum(1 for v in vacancies if v["short_shift"]))

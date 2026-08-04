@@ -1,4 +1,8 @@
-﻿data/
+﻿secrets/
+data/google-potrebnost.xlsx
+**/__pycache__/
+*.pyc
+.DS_Store
+data/
 *.xlsx
 _*.txt
-.DS_Store
