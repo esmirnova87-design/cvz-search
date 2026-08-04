@@ -271,20 +271,29 @@
       border: 1px solid var(--line);
       border-radius: 12px;
       background: var(--surface);
+      box-shadow: var(--shadow);
     }
     .view-toggle button {
       border: none;
       background: transparent;
-      color: var(--muted);
+      color: var(--text);
       font-weight: 700;
-      font-size: 0.86rem;
-      padding: 8px 14px;
+      font-size: 0.9rem;
+      padding: 10px 18px;
       border-radius: 9px;
       cursor: pointer;
     }
     .view-toggle button.active {
       background: var(--red);
       color: #fff;
+    }
+    .results-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
     }
 
     #mapPanel { display: none; }
@@ -416,11 +425,11 @@
         <div class="field" style="margin-bottom:6px">
           <label class="lbl">Регион</label>
         </div>
-        <div class="filter-tools row" style="margin-bottom:8px">
-          <button type="button" class="btn btn-ghost btn-sm" data-select-all="regionBox">Выбрать все</button>
-          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="regionBox">Сбросить</button>
-        </div>
         <div class="check-grid" id="regionBox"></div>
+        <div class="filter-tools row" style="margin-top:8px">
+          <button type="button" class="btn btn-ghost btn-sm" data-select-all="regionBox">Выбрать все</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="regionBox">Очистить фильтр</button>
+        </div>
 
         <div class="checks-simple">
           <label class="check"><input type="checkbox" id="housing" /> Нужно проживание</label>
@@ -433,11 +442,11 @@
         <div class="field" style="margin-bottom:6px">
           <label class="lbl">Тип объекта</label>
         </div>
-        <div class="filter-tools row" style="margin-bottom:8px">
-          <button type="button" class="btn btn-ghost btn-sm" data-select-all="typeBox">Выбрать все</button>
-          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="typeBox">Сбросить</button>
-        </div>
         <div class="check-grid compact" id="typeBox"></div>
+        <div class="filter-tools row" style="margin-top:8px">
+          <button type="button" class="btn btn-ghost btn-sm" data-select-all="typeBox">Выбрать все</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="typeBox">Очистить фильтр</button>
+        </div>
 
         <div class="people" id="people"></div>
 
@@ -453,9 +462,11 @@
           <h2>Подходящие вакансии</h2>
           <div class="count" id="countLabel"></div>
         </div>
-        <div class="view-toggle" role="group" aria-label="Вид выдачи">
-          <button type="button" class="active" id="viewList" data-view="list">Список</button>
-          <button type="button" id="viewMap" data-view="map">Карта</button>
+        <div class="results-toolbar">
+          <div class="view-toggle" role="group" aria-label="Вид выдачи">
+            <button type="button" class="active" id="viewList" data-view="list">Список</button>
+            <button type="button" id="viewMap" data-view="map">Карта</button>
+          </div>
         </div>
         <div class="cards" id="cards"></div>
         <div id="mapPanel">

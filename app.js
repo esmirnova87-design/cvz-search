@@ -182,11 +182,11 @@ function addPerson(preset = null) {
     <div class="field" style="margin-bottom:6px">
       <label class="lbl">Какие вакансии рассматриваем</label>
     </div>
-    <div class="filter-tools row" style="margin-bottom:8px">
-      <button type="button" class="btn btn-ghost btn-sm" data-jobs-all>Выбрать все</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-jobs-clear>Сбросить</button>
-    </div>
     <div class="check-grid jobs" data-jobs></div>
+    <div class="filter-tools row" style="margin-top:8px">
+      <button type="button" class="btn btn-ghost btn-sm" data-jobs-all>Выбрать все</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-jobs-clear>Очистить фильтр</button>
+    </div>
   `;
   peopleEl.appendChild(box);
 
@@ -371,7 +371,7 @@ function setView(mode) {
 }
 
 function renderCount(n, total) {
-  let msg = `подходят ${n} из базы в ${total}`;
+  let msg = `карточек: ${n} из ${total}`;
   if (n >= 0 && n <= 5) {
     msg += ` <em>(измените параметры поиска для большего количества вариантов)</em>`;
   }
