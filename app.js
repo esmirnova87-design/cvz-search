@@ -4,6 +4,7 @@ const isPartnerLink = Boolean(partnerCode);
 let partnerChatUrl = MAX_CHAT_DEFAULT;
 let bitrixEnums = null;
 let pendingApplyVacancy = null;
+let pendingApplyVacancyId = null;
 
 const priorityRegions = ["Москва", "Московская", "Санкт-Петербург", "Ленинградская"];
 
@@ -393,10 +394,13 @@ function fillApplySelects() {
 }
 
 function openApplyModal(vacancyId) {
+  pendingApplyVacancyId = vacancyId != null && vacancyId !== "" ? String(vacancyId) : null;
   pendingApplyVacancy = allVacancies.find((v) => String(v.id) === String(vacancyId)) || null;
   const label = document.getElementById("applyVacancyLabel");
   if (pendingApplyVacancy) {
     label.textContent = `Вакансия: ${pendingApplyVacancy.title}`;
+  } else if (pendingApplyVacancyId) {
+    label.textContent = `Отклик на вакансию ID: ${pendingApplyVacancyId}`;
   } else {
     label.textContent = "Оставьте данные — создадим заявку в Битрикс.";
   }
@@ -416,11 +420,12 @@ async function sendBitrixDeal() {
   if (!age || !citizenId || !regionId) throw new Error("Укажите возраст, гражданство и регион");
 
   const vac = pendingApplyVacancy;
+  const vacId = pendingApplyVacancyId || (vac ? String(vac.id) : "");
   const title = `Отклик с ЦВЗ сайта: ${fio}, ${age}`;
   const comments = [
-    "Источник: сайт поиска ЦВЗ",
+    vacId ? `ID: ${vacId}` : "ID: не указан",
     vac ? `Вакансия: ${vac.title}` : "",
-    vac ? `ID вакансии: ${vac.id}` : "",
+    "Источник: сайт поиска ЦВЗ",
     `ФИО: ${fio}`,
     `Телефон: ${phone}`,
     `Возраст: ${age}`,
