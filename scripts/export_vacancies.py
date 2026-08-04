@@ -9,11 +9,15 @@ Rows without digits (legacy) stay as one combined card until the sheet is fixed.
 """
 import json
 import re
+import sys
 from pathlib import Path
 
 import openpyxl
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from geo import geocode, load_cache, save_cache  # noqa: E402
+
 XLSX = ROOT / "data" / "Для сотрудников подбора.xlsx"
 OUT = ROOT / "vacancies.json"
 
@@ -345,6 +349,10 @@ def main():
     vacancies = []
     split_rows = 0
     legacy_rows = 0
+    geo_cache = load_cache()
+    geo_ok = 0
+    geo_miss = 0
+    use_network = "--geocode" in sys.argv
 
     for r in range(2, ws.max_row + 1):
         row = {headers[i]: ws.cell(r, i + 1).value for i in range(len(headers))}
@@ -561,6 +569,16 @@ def main():
                 "neighbors": norm(row.get("Соседние регионы*")),
             }
 
+            # Map pin: city/settlement only (never street / housing address)
+            geo = geocode(max_place, reg, cache=geo_cache, use_network=use_network)
+            lat = lng = None
+            geo_label = ""
+            if geo:
+                lat, lng, geo_label = geo
+                geo_ok += 1
+            else:
+                geo_miss += 1
+
             vacancies.append(
                 {
                     "id": card_id,
@@ -592,14 +610,19 @@ def main():
                     "short_shift": ot_num in (15, 21),
                     "travel_comp": travel_comp,
                     "sp": norm(sp),
+                    "lat": lat,
+                    "lng": lng,
+                    "geo_label": geo_label,
                     "details": details,
                 }
             )
 
+    save_cache(geo_cache)
     payload = {"updated": "local-excel", "total": len(vacancies), "items": vacancies}
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"exported {len(vacancies)} cards -> {OUT}")
     print(f"rows split by role: {split_rows}; legacy combined: {legacy_rows}")
+    print(f"geo pins: {geo_ok}; missing: {geo_miss}")
     print("short_shift", sum(1 for v in vacancies if v["short_shift"]))
     print("travel_comp", sum(1 for v in vacancies if v["travel_comp"]))
 

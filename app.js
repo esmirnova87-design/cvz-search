@@ -51,6 +51,10 @@ const citizenAliases = {
 
 let allVacancies = [];
 let lastResults = [];
+let currentView = "list";
+let map = null;
+let mapCluster = null;
+let mapReady = false;
 let personSeq = 0;
 
 const peopleEl = document.getElementById("people");
@@ -292,6 +296,80 @@ function filterVacancies() {
   });
 }
 
+function foodShort(v) {
+  if (!v.food) return "без питания";
+  if (v.food_times === 2) return "питание 2 раза";
+  if (v.food_times === 3) return "питание 3 раза";
+  return "питание";
+}
+
+function ensureMap() {
+  if (mapReady || typeof L === "undefined") return;
+  map = L.map("map", { scrollWheelZoom: true });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+  }).addTo(map);
+  mapCluster = L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 48,
+    spiderfyOnMaxZoom: true
+  });
+  map.addLayer(mapCluster);
+  map.setView([55.75, 37.6], 5);
+  mapReady = true;
+}
+
+function renderMap(list) {
+  ensureMap();
+  if (!mapReady) return;
+  mapCluster.clearLayers();
+  const withGeo = list.filter((v) => v.lat != null && v.lng != null);
+  const bounds = [];
+  withGeo.forEach((v, idx) => {
+    // Tiny deterministic offset so same-city pins spiderfy instead of stacking 1px
+    const jitter = ((idx % 7) - 3) * 0.002;
+    const lat = Number(v.lat) + jitter * 0.35;
+    const lng = Number(v.lng) + jitter;
+    const marker = L.marker([lat, lng]);
+    const tip = `
+      <div class="cvz-tooltip">
+        <strong>${escapeHtml(v.title.replace(/\s*\(ID:.*?\)\s*$/, ""))}</strong>
+        <span class="pay">${escapeHtml(String(v.pay || "—"))} руб/смена</span><br/>
+        ${escapeHtml(foodShort(v))}
+        ${v.geo_label ? `<br/><span style="opacity:.75">${escapeHtml(v.geo_label)}</span>` : ""}
+      </div>`;
+    marker.bindTooltip(tip, { direction: "top", offset: [0, -8], opacity: 0.96 });
+    marker.on("click", () => openDetailsModal(v.id));
+    mapCluster.addLayer(marker);
+    bounds.push([lat, lng]);
+  });
+
+  const miss = list.length - withGeo.length;
+  const hint = document.querySelector(".map-hint");
+  if (hint) {
+    let msg = "Можно двигать карту и менять масштаб. Наведите на точку — кратко, нажмите — подробнее. Точки — по городу/посёлку, без точного адреса.";
+    if (miss > 0) msg += ` Без точки на карте: ${miss}.`;
+    hint.textContent = msg;
+  }
+
+  setTimeout(() => {
+    map.invalidateSize();
+    if (bounds.length === 1) map.setView(bounds[0], 10);
+    else if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 });
+    else map.setView([55.75, 37.6], 5);
+  }, 60);
+}
+
+function setView(mode) {
+  currentView = mode === "map" ? "map" : "list";
+  document.getElementById("viewList").classList.toggle("active", currentView === "list");
+  document.getElementById("viewMap").classList.toggle("active", currentView === "map");
+  document.getElementById("cards").classList.toggle("hidden", currentView === "map");
+  document.getElementById("mapPanel").classList.toggle("active", currentView === "map");
+  if (currentView === "map") renderMap(lastResults);
+}
+
 function renderCount(n, total) {
   let msg = `подходят ${n} из базы в ${total}`;
   if (n >= 0 && n <= 5) {
@@ -313,6 +391,8 @@ function chipHtml(chips) {
 function renderCards(list) {
   lastResults = list;
   renderCount(list.length, allVacancies.length);
+  if (currentView === "map") renderMap(list);
+
   if (!list.length) {
     cardsEl.innerHTML = `<div class="card"><p class="duty">По выбранным параметрам вариантов нет. Снимите часть фильтров или расширьте регионы.</p></div>`;
     return;
@@ -618,8 +698,11 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 document.getElementById("addPerson").addEventListener("click", () => addPerson());
 document.getElementById("searchBtn").addEventListener("click", () => {
   runSearch();
-  cardsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  const target = currentView === "map" ? document.getElementById("mapPanel") : cardsEl;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+document.getElementById("viewList").addEventListener("click", () => setView("list"));
+document.getElementById("viewMap").addEventListener("click", () => setView("map"));
 document.getElementById("resetFilters").addEventListener("click", resetFilters);
 document.getElementById("copyAll").addEventListener("click", () => {
   if (!lastResults.length) {
