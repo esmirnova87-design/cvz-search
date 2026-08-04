@@ -4,6 +4,7 @@ window.CVZ_BITRIX = {
   webhookBase: "https://v-vahta.bitrix24.ru/rest/1/uauf8tlnd06ag6hq",
   categoryId: 0, // воронка «Соискатели»
   stageId: "NEW", // стадия «Отклики»
+  assignedById: 12, // Николай Соловьев
   fields: {
     fio: "UF_CRM_1763835920800",
     phone: "UF_CRM_1775735854411",

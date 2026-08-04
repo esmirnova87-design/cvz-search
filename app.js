@@ -438,6 +438,7 @@ async function sendBitrixDeal() {
     SOURCE_DESCRIPTION: "Сайт ЦВЗ",
     PHONE: [{ VALUE: phone, VALUE_TYPE: "MOBILE" }]
   };
+  if (cfg.assignedById) contactFields.ASSIGNED_BY_ID = cfg.assignedById;
   if (nameParts.length === 1) {
     contactFields.NAME = nameParts[0];
   } else if (nameParts.length === 2) {
@@ -468,6 +469,7 @@ async function sendBitrixDeal() {
     SOURCE_DESCRIPTION: vacId ? `Сайт ЦВЗ, ID вакансии: ${vacId}` : "Сайт ЦВЗ",
     OPENED: "Y"
   };
+  if (cfg.assignedById) dealFields.ASSIGNED_BY_ID = cfg.assignedById;
   if (fields.fio) dealFields[fields.fio] = fio;
   if (fields.phone) dealFields[fields.phone] = phone;
   if (fields.citizenship) dealFields[fields.citizenship] = citizenId;
