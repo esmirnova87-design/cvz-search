@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Download the ЦВЗ Google Sheet as xlsx for export_vacancies.py.
 
-Primary (simple): spreadsheet shared as «Anyone with the link → Viewer»
-  python scripts/fetch_google_sheet.py
+Uses a service account JSON (preferred, private sheet):
+  secrets/google-service-account.json
+  or GOOGLE_SERVICE_ACCOUNT_FILE / GOOGLE_APPLICATION_CREDENTIALS
 
-Optional (private): service account JSON shared on the sheet
-  set GOOGLE_SERVICE_ACCOUNT_FILE=path/to.json
-  or place file at secrets/google-service-account.json
+Share the spreadsheet with client_email as Viewer.
+Enable Google Sheets API in the GCP project.
+
+Fallback: public link export if the sheet is shared «anyone with the link».
 """
 from __future__ import annotations
 
@@ -31,49 +33,6 @@ def load_config():
     return cfg
 
 
-def download_public_xlsx(spreadsheet_id: str, dest: Path) -> None:
-    """Works when sheet is shared: Anyone with the link can view."""
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=xlsx"
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "CVZ-sheet-sync/1.0"},
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = resp.read()
-        ctype = (resp.headers.get("Content-Type") or "").lower()
-    if len(data) < 1000 or "html" in ctype:
-        raise RuntimeError(
-            "Google вернул не Excel. Обычно таблица закрыта для анонимного доступа. "
-            "Откройте доступ: «Настройки доступа → Все, у кого есть ссылка → Читатель»."
-        )
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
-
-
-def download_via_service_account(spreadsheet_id: str, dest: Path, sa_path: Path) -> None:
-    """Private sheets: share the spreadsheet with the service account email."""
-    try:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-    except ImportError as e:
-        raise SystemExit(
-            "Нужны пакеты: pip install google-auth google-api-python-client\n" + str(e)
-        ) from e
-
-    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
-    creds = service_account.Credentials.from_service_account_file(str(sa_path), scopes=scopes)
-    drive = build("drive", "v3", credentials=creds, cache_discovery=False)
-    request = drive.files().export_media(
-        fileId=spreadsheet_id,
-        mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    data = request.execute()
-    if not data or len(data) < 1000:
-        raise RuntimeError("Пустой ответ Drive export")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
-
-
 def resolve_sa_path() -> Path | None:
     env = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if env and Path(env).exists():
@@ -83,22 +42,85 @@ def resolve_sa_path() -> Path | None:
     return None
 
 
+def download_public_xlsx(spreadsheet_id: str, dest: Path) -> None:
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=xlsx"
+    req = urllib.request.Request(url, headers={"User-Agent": "CVZ-sheet-sync/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = resp.read()
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+    if len(data) < 1000 or "html" in ctype:
+        raise RuntimeError(
+            "Google вернул не Excel. Таблица закрыта для анонимного доступа."
+        )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+
+
+def download_via_sheets_api(spreadsheet_id: str, dest: Path, sa_path: Path, preferred_sheet: str) -> None:
+    """Read via Sheets API (no Drive API needed) and save as xlsx."""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        import openpyxl
+    except ImportError as e:
+        raise SystemExit(
+            "Нужны пакеты: pip install openpyxl google-auth google-api-python-client\n" + str(e)
+        ) from e
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    creds = service_account.Credentials.from_service_account_file(str(sa_path), scopes=scopes)
+    service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+
+    meta = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    sheets = meta.get("sheets", [])
+    titles = [s["properties"]["title"] for s in sheets]
+    if not titles:
+        raise RuntimeError("В таблице нет листов")
+
+    wb = openpyxl.Workbook()
+    # remove default sheet
+    default = wb.active
+    wb.remove(default)
+
+    # Export all sheets so formulas/refs are less surprising; export uses ПОТРЕБНОСТЬ1
+    for title in titles:
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=f"'{title}'", majorDimension="ROWS")
+            .execute()
+        )
+        values = result.get("values", [])
+        ws = wb.create_sheet(title=title[:31])
+        for r_i, row in enumerate(values, start=1):
+            for c_i, val in enumerate(row, start=1):
+                ws.cell(r_i, c_i).value = val
+
+    if preferred_sheet not in titles:
+        print(f"warning: sheet '{preferred_sheet}' not in {titles}")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(dest)
+    print(f"sheets via API: {len(titles)} tabs -> {dest}")
+
+
 def fetch(dest: Path | None = None) -> Path:
     cfg = load_config()
     sid = cfg["spreadsheetId"]
+    preferred = cfg.get("sheetName") or "ПОТРЕБНОСТЬ1"
     dest = dest or OUT_XLSX
     sa = resolve_sa_path()
-
     errors = []
+
     if sa:
         try:
-            print(f"fetch via service account: {sa.name}")
-            download_via_service_account(sid, dest, sa)
+            print(f"fetch via Sheets API + service account: {sa.name}")
+            download_via_sheets_api(sid, dest, sa, preferred)
             print(f"saved {dest} ({dest.stat().st_size} bytes)")
             return dest
         except Exception as e:
-            errors.append(f"service account: {e}")
-            print(f"service account failed: {e}")
+            errors.append(f"sheets api: {e}")
+            print(f"sheets api failed: {e}")
 
     try:
         print("fetch via public link export…")
@@ -110,13 +132,21 @@ def fetch(dest: Path | None = None) -> Path:
     except Exception as e:
         errors.append(f"public export: {e}")
 
+    sa_email = ""
+    if sa:
+        try:
+            sa_email = json.loads(sa.read_text(encoding="utf-8")).get("client_email", "")
+        except Exception:
+            pass
+
     msg = (
         "Не удалось скачать Google-таблицу.\n"
         + "\n".join(f"- {x}" for x in errors)
-        + "\n\nСделайте одно из двух:\n"
-        "1) Быстро: в таблице «Настройки доступа» → «Все, у кого есть ссылка» → Читатель\n"
-        "2) Безопаснее: service account JSON в secrets/google-service-account.json "
-        "и доступ к таблице на email из JSON (client_email).\n"
+        + "\n\nПроверьте:\n"
+        "1) В Google Cloud включён API: Google Sheets API\n"
+        f"   https://console.developers.google.com/apis/library/sheets.googleapis.com\n"
+        "2) В таблице выдан доступ Читатель на сервисный email:\n"
+        f"   {sa_email or '(client_email из JSON)'}\n"
     )
     raise SystemExit(msg)
 
