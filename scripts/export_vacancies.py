@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""Export active vacancies for the public search site.
+
+PUBLIC RULE: never export заказчик / адрес проживания / адрес объекта
+into fields that the website shows to candidates or partners.
+"""
 import json
 import re
 from pathlib import Path
@@ -30,6 +35,71 @@ def norm(v):
     if isinstance(v, float) and v == int(v):
         return str(int(v))
     return str(v).strip()
+
+
+def parse_food_times(food_raw, food_star):
+    text = f"{food_raw} {food_star}".lower().replace("ё", "е")
+    m = re.search(r"([123])\s*(раз|раза)", text)
+    if m:
+        return int(m.group(1))
+    if "три раз" in text:
+        return 3
+    if "два раз" in text:
+        return 2
+    if "один раз" in text or "1 раз" in text:
+        return 1
+    return None
+
+
+def parse_ot(ot_raw):
+    s = norm(ot_raw)
+    if not s:
+        return None
+    try:
+        return int(float(str(s).replace(",", ".").split()[0]))
+    except ValueError:
+        m = re.search(r"\d{1,3}", s)
+        return int(m.group()) if m else None
+
+
+def has_travel_compensation(comp_raw):
+    s = norm(comp_raw)
+    if not s:
+        return False
+    low = s.lower().replace("ё", "е")
+    keys = ("проезд", "билет", "такси", "дорог", "транспорт", "ж/д", "жд", "авиа", "компенс")
+    return any(k in low for k in keys)
+
+
+def build_chips(food, food_times, housing, sb, sp_raw, travel_comp):
+    chips = []
+    if food:
+        if food_times in (2, 3):
+            chips.append({"text": f"питание {food_times} раза", "ok": True})
+        else:
+            chips.append({"text": "питание", "ok": True})
+    if housing:
+        chips.append({"text": "проживание", "ok": True})
+    if sb in ("есть", "да"):
+        chips.append({"text": "СБ есть", "ok": False})
+    elif sb == "нет":
+        chips.append({"text": "без СБ", "ok": False})
+
+    sp_s = norm(sp_raw)
+    if sp_s:
+        if sp_s.lower() == "да":
+            chips.append({"text": "семейные комнаты: уточните наличие", "ok": True})
+        else:
+            try:
+                if float(str(sp_s).replace(",", ".")) > 0:
+                    chips.append({"text": "семейные комнаты: есть", "ok": True})
+            except ValueError:
+                if sp_s.lower() not in ("нет", "0", "-"):
+                    chips.append({"text": "семейные комнаты: уточните наличие", "ok": True})
+
+    if travel_comp:
+        chips.append({"text": "компенсация проезда", "ok": True})
+    return chips
 
 
 def main():
@@ -80,24 +150,26 @@ def main():
         tip_raw = re.sub(r"\s+", " ", norm(row.get("Тип")).lower())
         tip_id = tip_map.get(tip_raw, tip_raw)
         sb = norm(row.get("СБ")).lower()
-        med = norm(row.get("Мед книжка")).lower()
-        food_raw = norm(row.get("Питание")).lower()
+        med = norm(row.get("Мед книжка"))
+        food_raw = norm(row.get("Питание"))
+        food_star = norm(row.get("Питание*"))
         housing = norm(row.get("Проживание"))
         dol = norm(row.get("Должность"))
         for_max = norm(row.get("для МАКС"))
+        comp = norm(row.get("Компенсации"))
+        food_times = parse_food_times(food_raw, food_star)
+        ot_num = parse_ot(row.get("ОТ"))
+        travel_comp = has_travel_compensation(comp)
 
         dol_parts = [x.strip() for x in re.split(r"[\n/;]+", dol) if x.strip()]
-        # убрать хвосты вида "уборщица 2"
         dol_parts = [re.sub(r"\s+\d+$", "", p).strip() for p in dol_parts if p.strip()]
         dol_one = "/".join(dol_parts)
 
-        # Название для витрины — ТОЛЬКО из «для МАКС» (строка с 📍), не из «Объект»
         max_place = ""
         if for_max:
             lines = [ln.strip() for ln in for_max.splitlines() if ln.strip()]
             pin = next((ln for ln in lines if "📍" in ln), None)
             if not pin:
-                # первая строка без ссылок и без ✅🔥
                 pin = next(
                     (
                         ln
@@ -124,10 +196,7 @@ def main():
             id_num = int(float(vid)) if isinstance(vid, (int, float)) else str(vid).strip()
         except (TypeError, ValueError):
             id_num = str(vid).strip()
-        if title:
-            title = f"{title} (ID: {id_num})"
-        else:
-            title = f"(ID: {id_num})"
+        title = f"{title} (ID: {id_num})" if title else f"(ID: {id_num})"
 
         try:
             age_from = int(float(row.get("от") or 18))
@@ -157,6 +226,10 @@ def main():
         if photo and not photo.startswith("http"):
             photo = ""
 
+        food = food_raw.lower() in ("да", "есть", "1", "yes") or food_raw.lower().startswith("да")
+        if food_times:
+            food = True
+
         graph = norm(row.get("График вахты")).replace("\n", ", ")
         copy_parts = [f"ЦВЗ | {title}"]
         if reg:
@@ -165,32 +238,59 @@ def main():
             copy_parts.append(f"Ставка: до {rate_s} руб/смена")
         if graph:
             copy_parts.append(f"График: {graph}")
-        if row.get("Питание") is not None and norm(row.get("Питание")):
-            copy_parts.append(f"Питание: {norm(row.get('Питание'))}")
+        if food_raw:
+            copy_parts.append(f"Питание: {food_raw}")
         if housing:
             copy_parts.append(f"Проживание: {housing.splitlines()[0]}")
 
-        food = food_raw in ("да", "есть", "1", "yes") or food_raw.startswith("да")
-        chips = []
-        if food:
-            chips.append("питание")
-        if housing:
-            chips.append("проживание")
-        if sb in ("есть", "да"):
-            chips.append("СБ есть")
-        elif sb == "нет":
-            chips.append("без СБ")
-        ot = norm(row.get("ОТ"))
-        if ot:
-            chips.append(f"вахта от {ot}")
+        chips = build_chips(food, food_times, bool(housing), sb, sp, travel_comp)
 
         place_bits = [reg]
         if tip_label.get(tip_id):
             place_bits.append(tip_label[tip_id])
-        if ot:
-            place_bits.append(f"вахта от {ot}")
+        if ot_num:
+            place_bits.append(f"вахта от {ot_num}")
 
         sp_yes = str(sp).strip().lower() == "да" if sp is not None else False
+        med_l = med.lower()
+        # Public details only — NO заказчик, NO addresses
+        details = {
+            "citizens": ", ".join(citizens),
+            "age": f"{age_from}–{age_to}",
+            "demand": " · ".join(
+                [
+                    x
+                    for x in [
+                        f"М: {norm(m)}" if has_demand(m) else "",
+                        f"Ж: {norm(zh)}" if has_demand(zh) else "",
+                        f"СП: {norm(sp)}" if (has_demand(sp) or sp_yes) else "",
+                    ]
+                    if x
+                ]
+            ),
+            "sb": norm(row.get("СБ")),
+            "sb_extra": norm(row.get("СБ*")),
+            "med": med,
+            "region": reg,
+            "place": max_place,
+            "type": tip_label.get(tip_id, tip_id),
+            "ot": ot_num,
+            "schedule": norm(row.get("График вахты")),
+            "food": food_raw,
+            "food_extra": food_star,
+            "housing": housing,
+            "settle": norm(row.get("Заселение")),
+            "delivery": norm(row.get("Доставка")),
+            "contract": norm(row.get("Оформление")),
+            "clothes": norm(row.get("Спец одежда")),
+            "compensation": comp,
+            "jobs": dol_one,
+            "duties": norm(row.get("Обязанности")),
+            "rate_extra": norm(row.get("Ставка*")),
+            "extra": norm(row.get("доп инфа")),
+            "neighbors": norm(row.get("Соседние регионы*")),
+        }
+
         vacancies.append(
             {
                 "id": int(float(vid)) if isinstance(vid, (int, float)) else vid,
@@ -204,26 +304,31 @@ def main():
                 "region": reg,
                 "type": tip_id,
                 "food": food,
+                "food_times": food_times,
                 "housing": bool(housing),
                 "sb": sb,
                 "no_sb": sb == "нет",
                 "med": med,
-                "no_med": (not med) or ("не нуж" in med) or med == "нет",
+                "no_med": (not med) or ("не нуж" in med_l) or med_l == "нет",
                 "age_from": age_from,
                 "age_to": age_to,
                 "citizens": citizens,
                 "jobs": jobs,
                 "gender_m": has_demand(m) or sp_yes or has_demand(sp),
                 "gender_f": has_demand(zh) or sp_yes or has_demand(sp),
+                "ot": ot_num,
+                "short_shift": ot_num in (15, 21),
+                "travel_comp": travel_comp,
+                "sp": norm(sp),
+                "details": details,
             }
         )
 
     payload = {"updated": "local-excel", "total": len(vacancies), "items": vacancies}
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"exported {len(vacancies)} -> {OUT}")
-    regs = sorted({v["region"] for v in vacancies if v["region"]}, key=lambda x: x.lower())
-    print("regions:", regs)
-    print("types:", sorted({v["type"] for v in vacancies}))
+    print("short_shift", sum(1 for v in vacancies if v["short_shift"]))
+    print("travel_comp", sum(1 for v in vacancies if v["travel_comp"]))
 
 
 if __name__ == "__main__":

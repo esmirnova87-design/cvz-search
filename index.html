@@ -250,6 +250,8 @@
     }
     .btn-ghost:hover { background: var(--surface-2); }
     .btn-sm { padding: 9px 12px; border-radius: 10px; font-size: 0.86rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .filter-tools { margin-bottom: 8px; }
 
     .results-head {
       display: flex; justify-content: space-between; align-items: end; gap: 12px;
@@ -352,17 +354,26 @@
         <div class="field" style="margin-bottom:6px">
           <label class="lbl">Регион</label>
         </div>
+        <div class="filter-tools row" style="margin-bottom:8px">
+          <button type="button" class="btn btn-ghost btn-sm" data-select-all="regionBox">Выбрать все</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="regionBox">Сбросить</button>
+        </div>
         <div class="check-grid" id="regionBox"></div>
 
         <div class="checks-simple">
-          <label class="check"><input type="checkbox" id="housing" checked /> Нужно проживание</label>
-          <label class="check"><input type="checkbox" id="food" checked /> Нужно питание</label>
+          <label class="check"><input type="checkbox" id="housing" /> Нужно проживание</label>
+          <label class="check"><input type="checkbox" id="food" /> Нужно питание</label>
           <label class="check"><input type="checkbox" id="noSb" /> Без СБ</label>
           <label class="check"><input type="checkbox" id="noMed" /> Без медкнижки</label>
+          <label class="check"><input type="checkbox" id="shortShift" /> Короткая вахта (15/21)</label>
         </div>
 
         <div class="field" style="margin-bottom:6px">
           <label class="lbl">Тип объекта</label>
+        </div>
+        <div class="filter-tools row" style="margin-bottom:8px">
+          <button type="button" class="btn btn-ghost btn-sm" data-select-all="typeBox">Выбрать все</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-clear-box="typeBox">Сбросить</button>
         </div>
         <div class="check-grid compact" id="typeBox"></div>
 
@@ -388,17 +399,15 @@
     </div>
   </div>
 
-  <div class="modal-backdrop" id="docsModal">
-    <div class="modal">
-      <h3>Документы</h3>
-      <p>Вы выбрали гражданство не РФ. Все документы в наличии?</p>
-      <div class="yn">
-        <label class="check"><input type="radio" name="docsHave" value="yes" /> Да</label>
-        <label class="check"><input type="radio" name="docsHave" value="no" /> Нет</label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-ghost" id="docsCancel">Отмена</button>
-        <button type="button" class="btn btn-primary" id="docsOk">Подтвердить</button>
+  <div class="modal-backdrop" id="detailsModal">
+    <div class="modal" style="width:min(560px,100%); max-height:85vh; overflow:auto;">
+      <h3 id="detailsTitle">Подробнее</h3>
+      <p id="detailsPay" class="muted" style="margin-top:-6px"></p>
+      <div id="detailsBody"></div>
+      <div class="modal-actions" style="margin-top:14px; grid-template-columns:1fr 1fr 1fr;">
+        <button type="button" class="btn btn-ghost" id="detailsCopy">Скопировать</button>
+        <button type="button" class="btn btn-ghost" id="detailsClose">Закрыть</button>
+        <button type="button" class="btn btn-primary" id="detailsApply">Откликнуться</button>
       </div>
     </div>
   </div>
@@ -413,7 +422,7 @@
       </div>
       <div class="field">
         <label class="lbl" for="phone">Телефон</label>
-        <input id="phone" type="tel" placeholder="+7 999 999 99 99" />
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (999) 999-99-99" maxlength="18" />
       </div>
       <div class="row2">
         <div class="field">

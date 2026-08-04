@@ -1,3 +1,5 @@
+/* PUBLIC RULE: never show заказчик / адрес проживания / адрес объекта to candidates or partners. */
+
 const MAX_CHAT_DEFAULT = "https://max.ru/u/f9LHodD0cOJBDYiotyrlreRMBF60M4RCvreUWboUCVHdIqZOr7cTrxnzuuU";
 const partnerCode = new URLSearchParams(location.search).get("p") || "";
 const isPartnerLink = Boolean(partnerCode);
@@ -5,8 +7,10 @@ let partnerChatUrl = MAX_CHAT_DEFAULT;
 let bitrixEnums = null;
 let pendingApplyVacancy = null;
 let pendingApplyVacancyId = null;
+let pendingDetailsVacancy = null;
 
 const priorityRegions = ["Москва", "Московская", "Санкт-Петербург", "Ленинградская"];
+const HIDDEN_CITIZENS = new Set(["кавказ", "цыгане"]);
 
 const objectTypes = [
   { id: "пищ", label: "Пищевое производство" },
@@ -48,18 +52,17 @@ const citizenAliases = {
 let allVacancies = [];
 let lastResults = [];
 let personSeq = 0;
-let pendingCitizenPerson = null;
 
 const peopleEl = document.getElementById("people");
 const cardsEl = document.getElementById("cards");
 const toast = document.getElementById("toast");
-const docsModal = document.getElementById("docsModal");
 const applyModal = document.getElementById("applyModal");
+const detailsModal = document.getElementById("detailsModal");
 
 function showToast(text) {
   toast.textContent = text;
   toast.classList.add("show");
-  setTimeout(() => toast.classList.remove("show"), 1600);
+  setTimeout(() => toast.classList.remove("show"), 1800);
 }
 
 async function copyText(text) {
@@ -98,10 +101,9 @@ function fillRegionsFromData() {
     .sort((a, b) => a.localeCompare(b, "ru", { sensitivity: "base" }));
 
   const regionBox = document.getElementById("regionBox");
-  const top = priorityRegions.map((r, idx) => {
-    const checked = r === "Московская" ? "checked" : "";
-    return `<label class="check"><input type="checkbox" id="region_top_${idx}" value="${r}" ${checked} /> ${r}</label>`;
-  }).join("");
+  const top = priorityRegions.map((r, idx) =>
+    `<label class="check"><input type="checkbox" id="region_top_${idx}" value="${r}" /> ${r}</label>`
+  ).join("");
   const restHtml = rest.map((r, idx) =>
     `<label class="check"><input type="checkbox" id="region_az_${idx}" value="${r}" /> ${r}</label>`
   ).join("");
@@ -114,7 +116,9 @@ function fillRegionsFromData() {
 }
 
 function jobsForGender(g) {
-  return g === "Ж" ? jobsF : jobsM;
+  if (g === "Ж") return jobsF;
+  if (g === "М") return jobsM;
+  return [...new Set([...jobsM, ...jobsF])];
 }
 
 function refreshJobs(person) {
@@ -124,54 +128,29 @@ function refreshJobs(person) {
   renderCheckList(box, jobsForGender(gender), { checked: prev, prefix: "j" });
 }
 
-function setDocsLine(person, state) {
-  const line = person.querySelector("[data-docs-line]");
-  const citizen = person.querySelector("[data-citizen]").value;
-  const show = citizen !== "Россия";
-  line.classList.toggle("show", show);
-  const cb = line.querySelector("input");
-  if (!show) {
-    cb.checked = false;
-    cb.indeterminate = false;
-    person.dataset.docs = "";
-    return;
-  }
-  if (state === "yes") {
-    cb.checked = true;
-    cb.indeterminate = false;
-    person.dataset.docs = "yes";
-  } else if (state === "no") {
-    cb.checked = false;
-    cb.indeterminate = false;
-    person.dataset.docs = "no";
-  } else {
-    cb.checked = false;
-    cb.indeterminate = true;
-    person.dataset.docs = "";
-  }
-}
-
-function openDocsModal(person) {
-  pendingCitizenPerson = person;
-  docsModal.querySelectorAll('input[name="docsHave"]').forEach((r) => { r.checked = false; });
-  docsModal.classList.add("show");
+function renumberPeople() {
+  [...peopleEl.querySelectorAll(".person")].forEach((box, idx) => {
+    const n = idx + 1;
+    box.querySelector("[data-person-label]").textContent = `Кто едет: ${n}`;
+    const removeBtn = box.querySelector("[data-remove]");
+    if (removeBtn) removeBtn.style.display = n === 1 ? "none" : "";
+  });
 }
 
 function addPerson(preset = null) {
   personSeq += 1;
-  const n = personSeq;
   const box = document.createElement("div");
   box.className = "person";
-  box.dataset.docs = "";
   box.innerHTML = `
     <div class="person-head">
-      <span>Кто едет: ${n}</span>
+      <span data-person-label>Кто едет: ${personSeq}</span>
       <button type="button" class="linkish" data-remove>убрать</button>
     </div>
     <div class="row2">
       <div class="field">
         <label class="lbl">Гражданство</label>
         <select data-citizen>
+          <option value="">—</option>
           <option>Россия</option>
           <option>Беларусь</option>
           <option>Казахстан</option>
@@ -186,6 +165,7 @@ function addPerson(preset = null) {
       <div class="field">
         <label class="lbl">Пол</label>
         <select data-gender>
+          <option value="">—</option>
           <option>Ж</option>
           <option>М</option>
         </select>
@@ -193,22 +173,23 @@ function addPerson(preset = null) {
     </div>
     <div class="field">
       <label class="lbl">Возраст</label>
-      <input type="number" data-age min="18" max="70" value="30" />
-    </div>
-    <div class="docs-line" data-docs-line>
-      <label class="check"><input type="checkbox" data-docs-cb /> Все документы в наличии</label>
+      <input type="number" data-age min="18" max="70" placeholder="—" />
     </div>
     <div class="field" style="margin-bottom:6px">
       <label class="lbl">Какие вакансии рассматриваем</label>
+    </div>
+    <div class="filter-tools row" style="margin-bottom:8px">
+      <button type="button" class="btn btn-ghost btn-sm" data-jobs-all>Выбрать все</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-jobs-clear>Сбросить</button>
     </div>
     <div class="check-grid jobs" data-jobs></div>
   `;
   peopleEl.appendChild(box);
 
   if (preset) {
-    box.querySelector("[data-citizen]").value = preset.citizen || "Россия";
-    box.querySelector("[data-gender]").value = preset.gender || "Ж";
-    box.querySelector("[data-age]").value = preset.age || 30;
+    if (preset.citizen) box.querySelector("[data-citizen]").value = preset.citizen;
+    if (preset.gender) box.querySelector("[data-gender]").value = preset.gender;
+    if (preset.age != null && preset.age !== "") box.querySelector("[data-age]").value = preset.age;
   }
 
   refreshJobs(box);
@@ -217,24 +198,20 @@ function addPerson(preset = null) {
       inp.checked = preset.jobs.includes(inp.value);
     });
   }
-  if (preset && preset.citizen && preset.citizen !== "Россия") {
-    setDocsLine(box, preset.docs || "");
-  }
 
-  const citizenSelect = box.querySelector("[data-citizen]");
-  citizenSelect.addEventListener("change", () => {
-    if (citizenSelect.value !== "Россия") openDocsModal(box);
-    else setDocsLine(box, null);
-  });
-  box.querySelector("[data-docs-cb]").addEventListener("change", (e) => {
-    box.dataset.docs = e.target.checked ? "yes" : "no";
-    e.target.indeterminate = false;
-  });
   box.querySelector("[data-gender]").addEventListener("change", () => refreshJobs(box));
+  box.querySelector("[data-jobs-all]").addEventListener("click", () => {
+    box.querySelectorAll("[data-jobs] input").forEach((i) => { i.checked = true; });
+  });
+  box.querySelector("[data-jobs-clear]").addEventListener("click", () => {
+    box.querySelectorAll("[data-jobs] input").forEach((i) => { i.checked = false; });
+  });
   box.querySelector("[data-remove]").addEventListener("click", () => {
     if (peopleEl.querySelectorAll(".person").length <= 1) return;
     box.remove();
+    renumberPeople();
   });
+  renumberPeople();
 }
 
 function checkedValues(root) {
@@ -246,11 +223,11 @@ function normalizeCitizen(s) {
 }
 
 function citizenMatches(selected, vacancyCitizens) {
+  if (!selected) return true;
   const sel = normalizeCitizen(selected);
   const aliases = citizenAliases[sel] || [sel];
   const vac = vacancyCitizens.map(normalizeCitizen);
   if (!vac.length) return true;
-  // "кто угодно" / снг broad
   if (vac.some((c) => c.includes("кто угодно") || c === "снг" || c.includes("еаэс"))) return true;
   return aliases.some((a) => vac.some((c) => c === a || c.includes(a) || a.includes(c)));
 }
@@ -274,7 +251,8 @@ function regionMatches(selectedRegions, vacRegion) {
 
 function personFits(personEl, v) {
   const gender = personEl.querySelector("[data-gender]").value;
-  const age = Number(personEl.querySelector("[data-age]").value || 0);
+  const ageRaw = personEl.querySelector("[data-age]").value;
+  const age = ageRaw === "" ? 0 : Number(ageRaw);
   const citizen = personEl.querySelector("[data-citizen]").value;
   const jobs = checkedValues(personEl.querySelector("[data-jobs]"));
 
@@ -294,6 +272,7 @@ function getFilters() {
     food: document.getElementById("food").checked,
     noSb: document.getElementById("noSb").checked,
     noMed: document.getElementById("noMed").checked,
+    shortShift: document.getElementById("shortShift").checked,
     people: [...peopleEl.querySelectorAll(".person")]
   };
 }
@@ -307,7 +286,7 @@ function filterVacancies() {
     if (f.food && !v.food) return false;
     if (f.noSb && !v.no_sb) return false;
     if (f.noMed && !v.no_med) return false;
-    // все кто едет должны подходить к вакансии
+    if (f.shortShift && !v.short_shift) return false;
     if (f.people.length && !f.people.every((p) => personFits(p, v))) return false;
     return true;
   });
@@ -319,6 +298,16 @@ function renderCount(n, total) {
     msg += ` <em>(измените параметры поиска для большего количества вариантов)</em>`;
   }
   document.getElementById("countLabel").innerHTML = msg;
+}
+
+function chipHtml(chips) {
+  return (chips || []).map((c) => {
+    if (typeof c === "string") {
+      const ok = /питание|проживание|семей|компенсация/.test(c);
+      return `<span class="chip ${ok ? "ok" : ""}">${escapeHtml(c)}</span>`;
+    }
+    return `<span class="chip ${c.ok ? "ok" : ""}">${escapeHtml(c.text)}</span>`;
+  }).join("");
 }
 
 function renderCards(list) {
@@ -340,13 +329,11 @@ function renderCards(list) {
           <span>руб / смена</span>
         </div>
       </div>
-      <div class="meta">
-        ${(v.chips || []).map((c) => `<span class="chip ${/питание|проживание|семей/.test(c) ? "ok" : ""}">${escapeHtml(c)}</span>`).join("")}
-      </div>
+      <div class="meta">${chipHtml(v.chips)}</div>
       <p class="duty">${escapeHtml(v.duty || "")}</p>
       <div class="card-actions">
         <button class="btn btn-ghost btn-sm" data-copy="${encodeURIComponent(v.copy || "")}">Скопировать</button>
-        <button class="btn btn-ghost btn-sm" data-more>Подробнее</button>
+        <button class="btn btn-ghost btn-sm" data-more data-id="${escapeAttr(String(v.id))}">Подробнее</button>
         ${v.photo
           ? `<a class="btn btn-ghost btn-sm" href="${escapeAttr(v.photo)}" target="_blank" rel="noopener">Фото</a>`
           : `<button class="btn btn-ghost btn-sm" disabled title="Фото пока нет">Фото</button>`}
@@ -363,8 +350,61 @@ function renderCards(list) {
     btn.addEventListener("click", () => openApplyModal(btn.dataset.id));
   });
   cardsEl.querySelectorAll("[data-more]").forEach((btn) => {
-    btn.addEventListener("click", () => showToast("Подробнее — скоро"));
+    btn.addEventListener("click", () => openDetailsModal(btn.dataset.id));
   });
+}
+
+function detailsRows(v) {
+  const d = v.details || {};
+  const rows = [
+    ["Гражданство", d.citizens],
+    ["Возраст", d.age],
+    ["Потребность", d.demand],
+    ["СБ", d.sb],
+    ["СБ (детали)", d.sb_extra],
+    ["Медкнижка", d.med],
+    ["Регион", d.region],
+    ["Объект", d.place],
+    ["Тип", d.type],
+    ["Вахта от", d.ot != null ? `${d.ot} смен` : ""],
+    ["График", d.schedule],
+    ["Питание", d.food],
+    ["Питание (детали)", d.food_extra],
+    ["Проживание", d.housing],
+    ["Заселение", d.settle],
+    ["Доставка", d.delivery],
+    ["Оформление", d.contract],
+    ["Спецодежда", d.clothes],
+    ["Компенсации", d.compensation],
+    ["Должность", d.jobs],
+    ["Обязанности", d.duties],
+    ["Ставка (нюансы)", d.rate_extra],
+    ["Доп. инфа", d.extra],
+    ["Соседние регионы", d.neighbors]
+  ];
+  return rows.filter(([, val]) => val != null && String(val).trim() !== "");
+}
+
+function openDetailsModal(vacancyId) {
+  const v = allVacancies.find((x) => String(x.id) === String(vacancyId));
+  if (!v) return;
+  pendingDetailsVacancy = v;
+  document.getElementById("detailsTitle").textContent = v.title;
+  document.getElementById("detailsPay").textContent = v.pay ? `${v.pay} руб / смена` : "";
+  const body = document.getElementById("detailsBody");
+  body.innerHTML = detailsRows(v).map(([label, val]) => `
+    <div class="field" style="margin-bottom:10px">
+      <label class="lbl">${escapeHtml(label)}</label>
+      <div style="white-space:pre-wrap; line-height:1.45">${escapeHtml(String(val))}</div>
+    </div>
+  `).join("");
+  const applyBtn = document.getElementById("detailsApply");
+  applyBtn.style.display = isPartnerLink ? "none" : "";
+  detailsModal.classList.add("show");
+}
+
+function buildDetailsCopy(v) {
+  return [`ЦВЗ | ${v.title}`, ...detailsRows(v).map(([k, val]) => `${k}: ${val}`)].join("\n");
 }
 
 function ageToBitrixId(age) {
@@ -380,31 +420,57 @@ function fillApplySelects() {
   if (!bitrixEnums) return;
   const cit = document.getElementById("applyCitizen");
   const reg = document.getElementById("applyRegion");
-  cit.innerHTML = `<option value="">—</option>` + bitrixEnums.citizenship.map((x) =>
+  const citizens = (bitrixEnums.citizenship || []).filter((x) => !HIDDEN_CITIZENS.has(String(x.value || "").toLowerCase()));
+  cit.innerHTML = `<option value="">—</option>` + citizens.map((x) =>
     `<option value="${x.id}">${escapeHtml(x.value)}</option>`
   ).join("");
-  reg.innerHTML = `<option value="">—</option>` + bitrixEnums.region.map((x) =>
+  reg.innerHTML = `<option value="">—</option>` + (bitrixEnums.region || []).map((x) =>
     `<option value="${x.id}">${escapeHtml(x.value)}</option>`
   ).join("");
-  // default Россия / Москва if present
-  const ru = [...cit.options].find((o) => o.textContent === "Россия");
-  if (ru) cit.value = ru.value;
-  const mo = [...reg.options].find((o) => /Московская/.test(o.textContent));
-  if (mo) reg.value = mo.value;
 }
 
 function openApplyModal(vacancyId) {
   pendingApplyVacancyId = vacancyId != null && vacancyId !== "" ? String(vacancyId) : null;
   pendingApplyVacancy = allVacancies.find((v) => String(v.id) === String(vacancyId)) || null;
   const label = document.getElementById("applyVacancyLabel");
-  if (pendingApplyVacancy) {
-    label.textContent = `Вакансия: ${pendingApplyVacancy.title}`;
-  } else if (pendingApplyVacancyId) {
-    label.textContent = `Отклик на вакансию ID: ${pendingApplyVacancyId}`;
-  } else {
-    label.textContent = "Оставьте данные — создадим заявку в Битрикс.";
-  }
+  if (pendingApplyVacancy) label.textContent = `Вакансия: ${pendingApplyVacancy.title}`;
+  else if (pendingApplyVacancyId) label.textContent = `Отклик на вакансию ID: ${pendingApplyVacancyId}`;
+  else label.textContent = "Оставьте данные — создадим заявку в Битрикс.";
   applyModal.classList.add("show");
+}
+
+function phoneDigits(value) {
+  let d = String(value || "").replace(/\D/g, "");
+  if (d.startsWith("8")) d = "7" + d.slice(1);
+  if (d && !d.startsWith("7")) d = "7" + d;
+  return d.slice(0, 11);
+}
+
+function formatPhone(value) {
+  const d = phoneDigits(value);
+  if (!d) return "";
+  let out = "+7";
+  if (d.length > 1) out += " (" + d.slice(1, 4);
+  if (d.length >= 4) out += ")";
+  if (d.length > 4) out += " " + d.slice(4, 7);
+  if (d.length > 7) out += "-" + d.slice(7, 9);
+  if (d.length > 9) out += "-" + d.slice(9, 11);
+  return out;
+}
+
+function isValidPhone(value) {
+  const d = phoneDigits(value);
+  return d.length === 11 && d.startsWith("7");
+}
+
+function bindPhoneMask() {
+  const phone = document.getElementById("phone");
+  phone.addEventListener("input", () => {
+    const start = phone.selectionStart;
+    phone.value = formatPhone(phone.value);
+    try { phone.setSelectionRange(phone.value.length, phone.value.length); } catch (_) {}
+    void start;
+  });
 }
 
 async function sendBitrixDeal() {
@@ -417,17 +483,19 @@ async function sendBitrixDeal() {
   const citizenId = document.getElementById("applyCitizen").value;
   const regionId = document.getElementById("applyRegion").value;
   if (!fio || !phone) throw new Error("Укажите ФИО и телефон");
+  if (!isValidPhone(phone)) throw new Error("Введите телефон в формате +7 (999) 999-99-99");
   if (!age || !citizenId || !regionId) throw new Error("Укажите возраст, гражданство и регион");
 
   const vac = pendingApplyVacancy;
   const vacId = pendingApplyVacancyId || (vac ? String(vac.id) : "");
   const title = `Отклик с ЦВЗ сайта: ${fio}, ${age}`;
+  const phoneNorm = "+" + phoneDigits(phone);
   const comments = [
     vacId ? `ID: ${vacId}` : "ID: не указан",
     vac ? `Вакансия: ${vac.title}` : "",
     "Источник: сайт поиска ЦВЗ",
     `ФИО: ${fio}`,
-    `Телефон: ${phone}`,
+    `Телефон: ${phoneNorm}`,
     `Возраст: ${age}`,
   ].filter(Boolean).join("\n");
 
@@ -436,12 +504,11 @@ async function sendBitrixDeal() {
     OPENED: "Y",
     TYPE_ID: "CLIENT",
     SOURCE_DESCRIPTION: "Сайт ЦВЗ",
-    PHONE: [{ VALUE: phone, VALUE_TYPE: "MOBILE" }]
+    PHONE: [{ VALUE: phoneNorm, VALUE_TYPE: "MOBILE" }]
   };
   if (cfg.assignedById) contactFields.ASSIGNED_BY_ID = cfg.assignedById;
-  if (nameParts.length === 1) {
-    contactFields.NAME = nameParts[0];
-  } else if (nameParts.length === 2) {
+  if (nameParts.length === 1) contactFields.NAME = nameParts[0];
+  else if (nameParts.length === 2) {
     contactFields.LAST_NAME = nameParts[0];
     contactFields.NAME = nameParts[1];
   } else {
@@ -471,7 +538,7 @@ async function sendBitrixDeal() {
   };
   if (cfg.assignedById) dealFields.ASSIGNED_BY_ID = cfg.assignedById;
   if (fields.fio) dealFields[fields.fio] = fio;
-  if (fields.phone) dealFields[fields.phone] = phone;
+  if (fields.phone) dealFields[fields.phone] = phoneNorm;
   if (fields.citizenship) dealFields[fields.citizenship] = citizenId;
   if (fields.ageEnum) dealFields[fields.ageEnum] = ageToBitrixId(age);
   if (fields.ageAvito) dealFields[fields.ageAvito] = String(age);
@@ -487,7 +554,6 @@ async function sendBitrixDeal() {
   if (dealRes.error) throw new Error(dealRes.error_description || dealRes.error);
 
   const dealId = dealRes.result;
-  // явное привязывание контакта к сделке
   if (dealId && contactId) {
     await fetch(`${cfg.webhookBase}/crm.deal.contact.add.json`, {
       method: "POST",
@@ -511,8 +577,7 @@ function escapeAttr(s) {
 }
 
 function runSearch() {
-  const results = filterVacancies();
-  renderCards(results);
+  renderCards(filterVacancies());
 }
 
 async function loadData() {
@@ -526,6 +591,21 @@ async function loadData() {
   runSearch();
 }
 
+function resetFilters() {
+  fillRegionsFromData();
+  renderCheckList(document.getElementById("typeBox"), objectTypes);
+  document.getElementById("housing").checked = false;
+  document.getElementById("food").checked = false;
+  document.getElementById("noSb").checked = false;
+  document.getElementById("noMed").checked = false;
+  document.getElementById("shortShift").checked = false;
+  peopleEl.innerHTML = "";
+  personSeq = 0;
+  addPerson();
+  runSearch();
+  showToast("Фильтры сброшены");
+}
+
 document.getElementById("themeToggle").addEventListener("click", () => {
   const html = document.documentElement;
   const next = html.getAttribute("data-theme") === "light" ? "dark" : "light";
@@ -533,26 +613,11 @@ document.getElementById("themeToggle").addEventListener("click", () => {
   document.getElementById("themeToggle").textContent = next === "light" ? "Тёмная тема" : "Светлая тема";
 });
 
-document.getElementById("addPerson").addEventListener("click", () => addPerson({ gender: "М", age: 30 }));
+document.getElementById("addPerson").addEventListener("click", () => addPerson());
 document.getElementById("searchBtn").addEventListener("click", () => {
   runSearch();
   cardsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 });
-
-function resetFilters() {
-  fillRegionsFromData();
-  renderCheckList(document.getElementById("typeBox"), objectTypes);
-  document.getElementById("housing").checked = true;
-  document.getElementById("food").checked = true;
-  document.getElementById("noSb").checked = false;
-  document.getElementById("noMed").checked = false;
-  peopleEl.innerHTML = "";
-  personSeq = 0;
-  addPerson({ citizen: "Россия", gender: "Ж", age: 30 });
-  runSearch();
-  showToast("Фильтры сброшены");
-}
-
 document.getElementById("resetFilters").addEventListener("click", resetFilters);
 document.getElementById("copyAll").addEventListener("click", () => {
   if (!lastResults.length) {
@@ -562,23 +627,30 @@ document.getElementById("copyAll").addEventListener("click", () => {
   copyText(lastResults.map((v) => v.copy).join("\n\n————\n\n"));
 });
 
-document.getElementById("docsCancel").addEventListener("click", () => {
-  if (pendingCitizenPerson) {
-    pendingCitizenPerson.querySelector("[data-citizen]").value = "Россия";
-    setDocsLine(pendingCitizenPerson, null);
-  }
-  docsModal.classList.remove("show");
-  pendingCitizenPerson = null;
+document.querySelectorAll("[data-select-all]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const box = document.getElementById(btn.dataset.selectAll);
+    if (!box) return;
+    box.querySelectorAll("input[type=checkbox]").forEach((i) => { i.checked = true; });
+  });
 });
-document.getElementById("docsOk").addEventListener("click", () => {
-  const chosen = docsModal.querySelector('input[name="docsHave"]:checked');
-  if (!chosen) {
-    showToast("Выберите да или нет");
-    return;
-  }
-  if (pendingCitizenPerson) setDocsLine(pendingCitizenPerson, chosen.value);
-  docsModal.classList.remove("show");
-  pendingCitizenPerson = null;
+document.querySelectorAll("[data-clear-box]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const box = document.getElementById(btn.dataset.clearBox);
+    if (!box) return;
+    box.querySelectorAll("input[type=checkbox]").forEach((i) => { i.checked = false; });
+  });
+});
+
+document.getElementById("detailsClose").addEventListener("click", () => detailsModal.classList.remove("show"));
+document.getElementById("detailsCopy").addEventListener("click", () => {
+  if (!pendingDetailsVacancy) return;
+  copyText(buildDetailsCopy(pendingDetailsVacancy));
+});
+document.getElementById("detailsApply").addEventListener("click", () => {
+  if (!pendingDetailsVacancy) return;
+  detailsModal.classList.remove("show");
+  openApplyModal(pendingDetailsVacancy.id);
 });
 
 document.getElementById("applyCancel").addEventListener("click", () => applyModal.classList.remove("show"));
@@ -600,9 +672,11 @@ document.getElementById("applySend").addEventListener("click", async () => {
   }
 });
 
-[docsModal, applyModal].forEach((m) => m.addEventListener("click", (e) => {
+[applyModal, detailsModal].forEach((m) => m.addEventListener("click", (e) => {
   if (e.target === m) m.classList.remove("show");
 }));
+
+bindPhoneMask();
 
 async function loadPartnerChat() {
   if (!isPartnerLink) {
@@ -615,12 +689,10 @@ async function loadPartnerChat() {
     const data = await res.json();
     const found = (data.items || []).find((p) => p.code === partnerCode && p.active !== false);
     if (found && found.maxUrl) partnerChatUrl = found.maxUrl;
-  } catch (_) {
-    /* leave default */
-  }
+  } catch (_) { /* leave default */ }
 }
 
-addPerson({ citizen: "Россия", gender: "Ж", age: 30 });
+addPerson();
 
 Promise.all([
   fetch(`bitrix-enums.json?t=${Date.now()}`).then((r) => r.json()).then((d) => { bitrixEnums = d; fillApplySelects(); }).catch(() => {}),
