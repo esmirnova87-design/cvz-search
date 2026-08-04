@@ -58,7 +58,9 @@ CITY_COORDS = {
     "лобня": (56.0120, 37.4740),
     "серпухов": (54.9130, 37.4110),
     "заволжский": (56.8500, 41.0500),
-    "успенск": (45.1200, 41.3500),
+    # Успенское (Одинцовский р-н, МО) — не путать с одноимёнными на юге РФ
+    "успенск": (55.7280, 37.0900),
+    "успенское": (55.7280, 37.0900),
     "чебоксары": (56.1439, 47.2489),
     "шарапово": (55.6500, 37.0800),
     "муслюмово": (55.3000, 53.2000),
@@ -204,20 +206,33 @@ def lookup_static(locality, region=""):
     if "благовещенск" in key and ("башк" in reg or "башкортостан" in reg):
         return 55.0490, 55.9560, "Благовещенск (Башкортостан)"
 
+    # Успенск/Успенское в МО vs одноимённые на юге
+    if ("успенск" in key) and ("москов" in reg or reg == "москва"):
+        return 55.7280, 37.0900, locality
+
+    hit = None
     if key in CITY_COORDS:
         lat, lng = CITY_COORDS[key]
-        return lat, lng, locality
+        hit = (lat, lng, locality)
+    else:
+        key2 = re.sub(r"\s+(район|р-н)$", "", key).strip()
+        if key2 in CITY_COORDS:
+            lat, lng = CITY_COORDS[key2]
+            hit = (lat, lng, locality)
+        else:
+            for city, (lat, lng) in CITY_COORDS.items():
+                if city in key or key in city:
+                    hit = (lat, lng, locality)
+                    break
 
-    # strip trailing "район" etc.
-    key2 = re.sub(r"\s+(район|р-н)$", "", key).strip()
-    if key2 in CITY_COORDS:
-        lat, lng = CITY_COORDS[key2]
-        return lat, lng, locality
-
-    # contains known city
-    for city, (lat, lng) in CITY_COORDS.items():
-        if city in key or key in city:
-            return lat, lng, locality
+    if hit:
+        lat, lng, label = hit
+        # Sanity: МО/Москва не могут оказаться на юге/сибири из-за тёзок
+        if ("москов" in reg or reg == "москва") and not (54.2 <= lat <= 57.0 and 35.0 <= lng <= 40.5):
+            if reg in REGION_COORDS:
+                rlat, rlng = REGION_COORDS["московская" if "москов" in reg else "москва"]
+                return rlat, rlng, locality
+        return hit
 
     if reg in REGION_COORDS:
         lat, lng = REGION_COORDS[reg]
