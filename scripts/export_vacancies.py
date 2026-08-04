@@ -122,6 +122,29 @@ def has_travel_compensation(comp_raw):
     return any(k in low for k in keys)
 
 
+def is_moscow_city(*parts):
+    """True if public/internal place text points to Moscow city, not just Московская область."""
+    blob = " ".join(norm(p) for p in parts if p).lower().replace("ё", "е")
+    blob = re.sub(r"\s+", " ", blob)
+    if not blob:
+        return False
+    # explicit city token "москва" as its own word
+    if re.search(r"(^|[^а-яa-z])москва([^а-яa-z]|$)", blob):
+        return True
+    return False
+
+
+def normalize_region(reg_raw, place="", obj=""):
+    reg = norm(reg_raw).replace(" область", "").replace("Область", "").strip()
+    if reg in ("СПб", "СПБ"):
+        reg = "Санкт-Петербург"
+    if is_moscow_city(place, obj) or reg == "Москва":
+        return "Москва"
+    if reg in ("МО", "Московская"):
+        return "Московская"
+    return reg
+
+
 def build_chips(food, food_times, housing, sb, sp_raw, travel_comp):
     chips = []
     if food:
@@ -448,9 +471,8 @@ def main():
         citizen_raw = norm(row.get("гр-во"))
         citizens = [c.strip() for c in re.split(r"[\n,;/]+", citizen_raw) if c.strip()]
 
-        reg = norm(row.get("Регион")).replace(" область", "").replace("Область", "").strip()
-        if reg in ("СПб", "СПБ"):
-            reg = "Санкт-Петербург"
+        # Москва (город) vs Московская (область) — по тексту места/объекта, не склеиваем в фильтре
+        reg = normalize_region(row.get("Регион"), max_place, row.get("Объект"))
 
         photo = norm(row.get("фото"))
         if photo and not photo.startswith("http"):

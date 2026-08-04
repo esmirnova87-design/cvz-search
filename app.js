@@ -248,10 +248,7 @@ function jobMatches(selectedJobs, vacancyJobs) {
 
 function regionMatches(selectedRegions, vacRegion) {
   if (!selectedRegions.length) return true;
-  const expanded = new Set(selectedRegions);
-  if (expanded.has("Москва")) expanded.add("Московская");
-  if (expanded.has("Московская")) expanded.add("Москва");
-  return expanded.has(vacRegion);
+  return selectedRegions.includes(vacRegion);
 }
 
 function personFits(personEl, v) {
