@@ -304,30 +304,50 @@ function foodShort(v) {
 }
 
 function ensureMap() {
-  if (mapReady || typeof L === "undefined") return;
-  map = L.map("map", { scrollWheelZoom: true });
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-  }).addTo(map);
-  mapCluster = L.markerClusterGroup({
-    showCoverageOnHover: false,
-    maxClusterRadius: 48,
-    spiderfyOnMaxZoom: true
-  });
-  map.addLayer(mapCluster);
-  map.setView([55.75, 37.6], 5);
-  mapReady = true;
+  if (mapReady) return true;
+  if (typeof L === "undefined") {
+    showToast("Карта не загрузилась, обновите страницу");
+    return false;
+  }
+  try {
+    map = L.map("map", { scrollWheelZoom: true });
+    if (L.Icon && L.Icon.Default) {
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "vendor/leaflet/images/marker-icon-2x.png",
+        iconUrl: "vendor/leaflet/images/marker-icon.png",
+        shadowUrl: "vendor/leaflet/images/marker-shadow.png"
+      });
+    }
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+    }).addTo(map);
+    if (typeof L.markerClusterGroup === "function") {
+      mapCluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 48,
+        spiderfyOnMaxZoom: true
+      });
+    } else {
+      mapCluster = L.layerGroup();
+    }
+    map.addLayer(mapCluster);
+    map.setView([55.75, 37.6], 5);
+    mapReady = true;
+    return true;
+  } catch (err) {
+    console.error(err);
+    showToast("Ошибка карты: " + (err.message || "неизвестно"));
+    return false;
+  }
 }
 
 function renderMap(list) {
-  ensureMap();
-  if (!mapReady) return;
+  if (!ensureMap()) return;
   mapCluster.clearLayers();
   const withGeo = list.filter((v) => v.lat != null && v.lng != null);
   const bounds = [];
   withGeo.forEach((v, idx) => {
-    // Tiny deterministic offset so same-city pins spiderfy instead of stacking 1px
     const jitter = ((idx % 7) - 3) * 0.002;
     const lat = Number(v.lat) + jitter * 0.35;
     const lng = Number(v.lng) + jitter;
@@ -354,20 +374,30 @@ function renderMap(list) {
   }
 
   setTimeout(() => {
-    map.invalidateSize();
-    if (bounds.length === 1) map.setView(bounds[0], 10);
-    else if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 });
-    else map.setView([55.75, 37.6], 5);
-  }, 60);
+    try {
+      map.invalidateSize();
+      if (bounds.length === 1) map.setView(bounds[0], 10);
+      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 });
+      else map.setView([55.75, 37.6], 5);
+    } catch (_) { /* ignore */ }
+  }, 80);
 }
 
 function setView(mode) {
   currentView = mode === "map" ? "map" : "list";
-  document.getElementById("viewList").classList.toggle("active", currentView === "list");
-  document.getElementById("viewMap").classList.toggle("active", currentView === "map");
-  document.getElementById("cards").classList.toggle("hidden", currentView === "map");
-  document.getElementById("mapPanel").classList.toggle("active", currentView === "map");
-  if (currentView === "map") renderMap(lastResults);
+  const listBtn = document.getElementById("viewList");
+  const mapBtn = document.getElementById("viewMap");
+  const cards = document.getElementById("cards");
+  const panel = document.getElementById("mapPanel");
+  if (listBtn) listBtn.classList.toggle("active", currentView === "list");
+  if (mapBtn) mapBtn.classList.toggle("active", currentView === "map");
+  if (cards) cards.classList.toggle("hidden", currentView === "map");
+  if (panel) panel.classList.toggle("active", currentView === "map");
+  if (currentView === "map") {
+    renderMap(lastResults);
+    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("Режим: карта");
+  }
 }
 
 function renderCount(n, total) {
@@ -701,8 +731,8 @@ document.getElementById("searchBtn").addEventListener("click", () => {
   const target = currentView === "map" ? document.getElementById("mapPanel") : cardsEl;
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 });
-document.getElementById("viewList").addEventListener("click", () => setView("list"));
-document.getElementById("viewMap").addEventListener("click", () => setView("map"));
+document.getElementById("viewList")?.addEventListener("click", () => setView("list"));
+document.getElementById("viewMap")?.addEventListener("click", () => setView("map"));
 document.getElementById("resetFilters").addEventListener("click", resetFilters);
 document.getElementById("copyAll").addEventListener("click", () => {
   if (!lastResults.length) {
