@@ -55,6 +55,7 @@ let currentView = "list";
 let map = null;
 let mapCluster = null;
 let mapReady = false;
+const MAP_BUILD = 4;
 let personSeq = 0;
 
 const peopleEl = document.getElementById("people");
@@ -303,35 +304,94 @@ function foodShort(v) {
   return "питание";
 }
 
+/** Spread pins that share the same city center so clusters can zoom/spiderfy usefully. */
+function spreadPoints(items) {
+  const groups = new Map();
+  items.forEach((v, idx) => {
+    const key = `${Number(v.lat).toFixed(3)}|${Number(v.lng).toFixed(3)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ v, idx });
+  });
+  const out = [];
+  groups.forEach((arr) => {
+    const n = arr.length;
+    arr.forEach((item, i) => {
+      let lat = Number(item.v.lat);
+      let lng = Number(item.v.lng);
+      if (n > 1) {
+        const ring = Math.floor(i / 10);
+        const pos = i % 10;
+        const radius = 0.012 + ring * 0.01; // ~1.3km+
+        const angle = (pos / 10) * Math.PI * 2 + ring * 0.35;
+        lat += radius * Math.cos(angle);
+        lng += radius * Math.sin(angle);
+      }
+      out.push({ v: item.v, lat, lng });
+    });
+  });
+  return out;
+}
+
 function pinIcon() {
   return L.divIcon({
     className: "cvz-pin-wrap",
-    html: '<div class="cvz-pin" aria-hidden="true"></div>',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
+    html: '<div class="cvz-pin" title=""></div>',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
     tooltipAnchor: [0, -12]
   });
 }
 
+function destroyMap() {
+  if (map) {
+    try { map.remove(); } catch (_) { /* ignore */ }
+  }
+  map = null;
+  mapCluster = null;
+  mapReady = false;
+}
+
 function ensureMap() {
-  if (mapReady) return true;
+  if (mapReady && map) return true;
   if (typeof L === "undefined") {
     showToast("Карта не загрузилась, обновите страницу");
     return false;
   }
   try {
-    map = L.map("map", { scrollWheelZoom: true });
+    destroyMap();
+    const el = document.getElementById("map");
+    if (!el) return false;
+    el.innerHTML = "";
+    map = L.map(el, { scrollWheelZoom: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 18,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+      attribution: '&copy; OSM'
     }).addTo(map);
+
+    // Never use default PNG markers (broken on GH Pages path).
+    if (L.Icon && L.Icon.Default) {
+      L.Icon.Default.prototype._getIconUrl = function getIconUrl() {
+        return "";
+      };
+    }
+
     if (typeof L.markerClusterGroup === "function") {
       mapCluster = L.markerClusterGroup({
         showCoverageOnHover: false,
-        maxClusterRadius: 48,
+        maxClusterRadius: 55,
         spiderfyOnMaxZoom: true,
         zoomToBoundsOnClick: true,
-        disableClusteringAtZoom: 13
+        disableClusteringAtZoom: 12,
+        spiderLegPolylineOptions: { weight: 2, color: "#f11c23", opacity: 0.55 },
+        iconCreateFunction(cluster) {
+          const count = cluster.getChildCount();
+          const size = count < 10 ? "small" : count < 50 ? "medium" : "large";
+          return L.divIcon({
+            html: `<div><span>${count}</span></div>`,
+            className: `marker-cluster marker-cluster-${size}`,
+            iconSize: L.point(40, 40)
+          });
+        }
       });
     } else {
       mapCluster = L.layerGroup();
@@ -351,14 +411,17 @@ function renderMap(list) {
   if (!ensureMap()) return;
   mapCluster.clearLayers();
   const withGeo = list.filter((v) => v.lat != null && v.lng != null);
+  const placed = spreadPoints(withGeo);
   const bounds = [];
   const icon = pinIcon();
-  withGeo.forEach((v, idx) => {
-    const jitter = ((idx % 7) - 3) * 0.002;
-    const lat = Number(v.lat) + jitter * 0.35;
-    const lng = Number(v.lng) + jitter;
-    const marker = L.marker([lat, lng], { icon });
-    const shortTitle = v.title.replace(/\s*\(ID:.*?\)\s*$/, "");
+
+  placed.forEach(({ v, lat, lng }) => {
+    const marker = L.marker([lat, lng], {
+      icon,
+      keyboard: true,
+      riseOnHover: true
+    });
+    const shortTitle = String(v.title || "").replace(/\s*\(ID:.*?\)\s*$/, "");
     const tip = `
       <div class="cvz-tooltip">
         <strong>${escapeHtml(shortTitle)}</strong>
@@ -366,7 +429,7 @@ function renderMap(list) {
         ${escapeHtml(foodShort(v))}
         ${v.geo_label ? `<br/><span style="opacity:.75">${escapeHtml(v.geo_label)}</span>` : ""}
       </div>`;
-    marker.bindTooltip(tip, { direction: "top", offset: [0, -10], opacity: 0.96, sticky: true });
+    marker.bindTooltip(tip, { direction: "top", offset: [0, -12], opacity: 0.96 });
     marker.on("click", () => openDetailsModal(v.id));
     mapCluster.addLayer(marker);
     bounds.push([lat, lng]);
@@ -375,8 +438,8 @@ function renderMap(list) {
   const miss = list.length - withGeo.length;
   const hint = document.querySelector(".map-hint");
   if (hint) {
-    let msg = "Клик по красному кружку с цифрой — приблизить. Клик по точке — подробнее. Наведение — кратко (название, ставка, питание). Точки по городу, без точного адреса.";
-    if (miss > 0) msg += ` Без точки на карте: ${miss}.`;
+    let msg = `Карта v${MAP_BUILD}. Клик по кружку с цифрой — приблизить/раскрыть. Клик по красной точке — подробнее.`;
+    if (miss > 0) msg += ` Без точки: ${miss}.`;
     hint.textContent = msg;
   }
 
@@ -384,10 +447,10 @@ function renderMap(list) {
     try {
       map.invalidateSize();
       if (bounds.length === 1) map.setView(bounds[0], 10);
-      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 });
+      else if (bounds.length > 1) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 10 });
       else map.setView([55.75, 37.6], 5);
     } catch (_) { /* ignore */ }
-  }, 80);
+  }, 100);
 }
 
 function setView(mode) {
@@ -401,9 +464,11 @@ function setView(mode) {
   if (cards) cards.classList.toggle("hidden", currentView === "map");
   if (panel) panel.classList.toggle("active", currentView === "map");
   if (currentView === "map") {
+    // Remount map each time so old broken default icons cannot stick around.
+    destroyMap();
     renderMap(lastResults);
     if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast("Режим: карта");
+    showToast(`Режим: карта (v${MAP_BUILD})`);
   }
 }
 

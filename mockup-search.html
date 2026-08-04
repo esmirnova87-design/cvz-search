@@ -326,16 +326,24 @@
       font-weight: 700;
     }
     .cvz-pin {
-      width: 18px;
-      height: 18px;
-      margin-left: -9px;
-      margin-top: -9px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: #f11c23;
       border: 2px solid #fff;
       box-shadow: 0 2px 8px rgba(7, 33, 57, 0.45);
     }
-    .cvz-pin-wrap { background: transparent !important; border: none !important; }
+    .cvz-pin-wrap {
+      background: transparent !important;
+      border: none !important;
+      width: 20px !important;
+      height: 20px !important;
+    }
+    .cvz-pin-wrap img { display: none !important; }
+    .leaflet-marker-icon.cvz-pin-wrap {
+      margin-left: -10px !important;
+      margin-top: -10px !important;
+    }
     .map-hint {
       margin: 8px 0 0;
       color: var(--muted);
@@ -542,6 +550,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
   <script src="bitrix-config.js"></script>
-  <script src="app.js?v=map3"></script>
+  <script src="app.js?v=map4"></script>
 </body>
 </html>
