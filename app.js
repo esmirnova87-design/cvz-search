@@ -488,10 +488,12 @@ async function sendBitrixDeal() {
 
   const vac = pendingApplyVacancy;
   const vacId = pendingApplyVacancyId || (vac ? String(vac.id) : "");
+  const objectId = vac && vac.object_id != null ? String(vac.object_id) : (vacId.includes("-") ? vacId.split("-")[0] : vacId);
   const title = `Отклик с ЦВЗ сайта: ${fio}, ${age}`;
   const phoneNorm = "+" + phoneDigits(phone);
   const comments = [
-    vacId ? `ID: ${vacId}` : "ID: не указан",
+    objectId ? `ID: ${objectId}` : "ID: не указан",
+    vacId && vacId !== objectId ? `Карточка: ${vacId}` : "",
     vac ? `Вакансия: ${vac.title}` : "",
     "Источник: сайт поиска ЦВЗ",
     `ФИО: ${fio}`,
