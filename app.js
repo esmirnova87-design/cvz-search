@@ -401,6 +401,22 @@ document.getElementById("searchBtn").addEventListener("click", () => {
   runSearch();
   cardsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+
+function resetFilters() {
+  fillRegionsFromData();
+  renderCheckList(document.getElementById("typeBox"), objectTypes);
+  document.getElementById("housing").checked = true;
+  document.getElementById("food").checked = true;
+  document.getElementById("noSb").checked = false;
+  document.getElementById("noMed").checked = false;
+  peopleEl.innerHTML = "";
+  personSeq = 0;
+  addPerson({ citizen: "Россия", gender: "Ж", age: 30 });
+  runSearch();
+  showToast("Фильтры сброшены");
+}
+
+document.getElementById("resetFilters").addEventListener("click", resetFilters);
 document.getElementById("copyAll").addEventListener("click", () => {
   if (!lastResults.length) {
     showToast("Нечего копировать");
