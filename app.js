@@ -1,4 +1,9 @@
-const MAX_CHAT = "https://max.ru/u/f9LHodD0cOJBDYiotyrlreRMBF60M4RCvreUWboUCVHdIqZOr7cTrxnzuuU";
+const MAX_CHAT_DEFAULT = "https://max.ru/u/f9LHodD0cOJBDYiotyrlreRMBF60M4RCvreUWboUCVHdIqZOr7cTrxnzuuU";
+const partnerCode = new URLSearchParams(location.search).get("p") || "";
+const isPartnerLink = Boolean(partnerCode);
+let partnerChatUrl = MAX_CHAT_DEFAULT;
+let bitrixEnums = null;
+let pendingApplyVacancy = null;
 
 const priorityRegions = ["Москва", "Московская", "Санкт-Петербург", "Ленинградская"];
 
@@ -344,8 +349,8 @@ function renderCards(list) {
         ${v.photo
           ? `<a class="btn btn-ghost btn-sm" href="${escapeAttr(v.photo)}" target="_blank" rel="noopener">Фото</a>`
           : `<button class="btn btn-ghost btn-sm" disabled title="Фото пока нет">Фото</button>`}
-        <button class="btn btn-primary btn-sm" data-apply>Откликнуться</button>
-        <a class="btn btn-ghost btn-sm" href="${MAX_CHAT}" target="_blank" rel="noopener">Задать вопрос в чате</a>
+        ${isPartnerLink ? "" : `<button class="btn btn-primary btn-sm" data-apply data-id="${escapeAttr(String(v.id))}">Откликнуться</button>`}
+        <a class="btn btn-ghost btn-sm" href="${escapeAttr(partnerChatUrl)}" target="_blank" rel="noopener">Задать вопрос в чате</a>
       </div>
     </article>
   `).join("");
@@ -354,11 +359,117 @@ function renderCards(list) {
     btn.addEventListener("click", () => copyText(decodeURIComponent(btn.dataset.copy || "")));
   });
   cardsEl.querySelectorAll("[data-apply]").forEach((btn) => {
-    btn.addEventListener("click", () => applyModal.classList.add("show"));
+    btn.addEventListener("click", () => openApplyModal(btn.dataset.id));
   });
   cardsEl.querySelectorAll("[data-more]").forEach((btn) => {
     btn.addEventListener("click", () => showToast("Подробнее — скоро"));
   });
+}
+
+function ageToBitrixId(age) {
+  const n = Number(age);
+  if (!n) return "";
+  if (n < 30) return "126";
+  if (n < 40) return "128";
+  if (n < 55) return "130";
+  return "132";
+}
+
+function fillApplySelects() {
+  if (!bitrixEnums) return;
+  const cit = document.getElementById("applyCitizen");
+  const reg = document.getElementById("applyRegion");
+  cit.innerHTML = `<option value="">—</option>` + bitrixEnums.citizenship.map((x) =>
+    `<option value="${x.id}">${escapeHtml(x.value)}</option>`
+  ).join("");
+  reg.innerHTML = `<option value="">—</option>` + bitrixEnums.region.map((x) =>
+    `<option value="${x.id}">${escapeHtml(x.value)}</option>`
+  ).join("");
+  // default Россия / Москва if present
+  const ru = [...cit.options].find((o) => o.textContent === "Россия");
+  if (ru) cit.value = ru.value;
+  const mo = [...reg.options].find((o) => /Московская/.test(o.textContent));
+  if (mo) reg.value = mo.value;
+}
+
+function openApplyModal(vacancyId) {
+  pendingApplyVacancy = allVacancies.find((v) => String(v.id) === String(vacancyId)) || null;
+  const label = document.getElementById("applyVacancyLabel");
+  if (pendingApplyVacancy) {
+    label.textContent = `Вакансия: ${pendingApplyVacancy.title}`;
+  } else {
+    label.textContent = "Оставьте данные — создадим заявку в Битрикс.";
+  }
+  applyModal.classList.add("show");
+}
+
+async function sendBitrixDeal() {
+  const cfg = window.CVZ_BITRIX;
+  if (!cfg || !cfg.webhookBase) throw new Error("Не настроен Битрикс");
+
+  const fio = document.getElementById("fio").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const age = document.getElementById("applyAge").value.trim();
+  const citizenId = document.getElementById("applyCitizen").value;
+  const regionId = document.getElementById("applyRegion").value;
+  if (!fio || !phone) throw new Error("Укажите ФИО и телефон");
+  if (!age || !citizenId || !regionId) throw new Error("Укажите возраст, гражданство и регион");
+
+  const vac = pendingApplyVacancy;
+  const title = vac
+    ? `Сайт ЦВЗ: ${vac.title}`
+    : `Сайт ЦВЗ: отклик от ${fio}`;
+  const comments = [
+    "Источник: сайт поиска ЦВЗ",
+    vac ? `Вакансия: ${vac.title}` : "",
+    vac ? `ID вакансии: ${vac.id}` : "",
+    `ФИО: ${fio}`,
+    `Телефон: ${phone}`,
+    `Возраст: ${age}`,
+  ].filter(Boolean).join("\n");
+
+  const fields = cfg.fields || {};
+  const dealFields = {
+    TITLE: title,
+    CATEGORY_ID: cfg.categoryId,
+    STAGE_ID: cfg.stageId,
+    COMMENTS: comments,
+    SOURCE_DESCRIPTION: "Сайт ЦВЗ",
+    OPENED: "Y"
+  };
+  if (fields.fio) dealFields[fields.fio] = fio;
+  if (fields.phone) dealFields[fields.phone] = phone;
+  if (fields.citizenship) dealFields[fields.citizenship] = citizenId;
+  if (fields.age) dealFields[fields.age] = ageToBitrixId(age);
+  if (fields.region) dealFields[fields.region] = regionId;
+  if (fields.objectName && vac) dealFields[fields.objectName] = vac.title;
+  if (fields.vacancyUrl) dealFields[fields.vacancyUrl] = location.href.split("?")[0];
+
+  // контакт с телефоном + сделка
+  const contactPayload = {
+    fields: {
+      NAME: fio,
+      OPENED: "Y",
+      TYPE_ID: "CLIENT",
+      SOURCE_DESCRIPTION: "Сайт ЦВЗ",
+      PHONE: [{ VALUE: phone, VALUE_TYPE: "MOBILE" }]
+    }
+  };
+  const contactRes = await fetch(`${cfg.webhookBase}/crm.contact.add.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(contactPayload)
+  }).then((r) => r.json());
+  if (contactRes.error) throw new Error(contactRes.error_description || contactRes.error);
+  if (contactRes.result) dealFields.CONTACT_ID = contactRes.result;
+
+  const dealRes = await fetch(`${cfg.webhookBase}/crm.deal.add.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: dealFields })
+  }).then((r) => r.json());
+  if (dealRes.error) throw new Error(dealRes.error_description || dealRes.error);
+  return dealRes.result;
 }
 
 function escapeHtml(s) {
@@ -445,27 +556,51 @@ document.getElementById("docsOk").addEventListener("click", () => {
 });
 
 document.getElementById("applyCancel").addEventListener("click", () => applyModal.classList.remove("show"));
-document.getElementById("applySend").addEventListener("click", () => {
-  const fio = document.getElementById("fio").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  if (!fio || !phone) {
-    showToast("Укажите ФИО и телефон");
-    return;
+document.getElementById("applySend").addEventListener("click", async () => {
+  const btn = document.getElementById("applySend");
+  btn.disabled = true;
+  try {
+    await sendBitrixDeal();
+    applyModal.classList.remove("show");
+    document.getElementById("fio").value = "";
+    document.getElementById("phone").value = "";
+    document.getElementById("applyAge").value = "";
+    showToast("Заявка принята, напишем в MAX/позвоним");
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "Ошибка отправки");
+  } finally {
+    btn.disabled = false;
   }
-  applyModal.classList.remove("show");
-  showToast("Отклик принят (макет Битрикс)");
 });
 
 [docsModal, applyModal].forEach((m) => m.addEventListener("click", (e) => {
   if (e.target === m) m.classList.remove("show");
 }));
 
-addPerson({ citizen: "Россия", gender: "Ж", age: 38, jobs: ["упаковщица", "комплектовщик", "уборщица"] });
-addPerson({ citizen: "Беларусь", gender: "М", age: 41, jobs: ["грузчик", "комплектовщик", "разнорабочий"], docs: "" });
-const p2 = peopleEl.querySelectorAll(".person")[1];
-if (p2) setDocsLine(p2, "");
+async function loadPartnerChat() {
+  if (!isPartnerLink) {
+    partnerChatUrl = MAX_CHAT_DEFAULT;
+    return;
+  }
+  try {
+    const res = await fetch(`partners-data.json?t=${Date.now()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const found = (data.items || []).find((p) => p.code === partnerCode && p.active !== false);
+    if (found && found.maxUrl) partnerChatUrl = found.maxUrl;
+  } catch (_) {
+    /* leave default */
+  }
+}
 
-loadData().catch((err) => {
+addPerson({ citizen: "Россия", gender: "Ж", age: 30 });
+
+Promise.all([
+  fetch(`bitrix-enums.json?t=${Date.now()}`).then((r) => r.json()).then((d) => { bitrixEnums = d; fillApplySelects(); }).catch(() => {}),
+  loadPartnerChat(),
+  loadData()
+]).catch((err) => {
   console.error(err);
-  cardsEl.innerHTML = `<div class="card"><p class="duty">Ошибка загрузки базы: ${escapeHtml(err.message)}</p></div>`;
+  cardsEl.innerHTML = `<div class="card"><p class="duty">Ошибка загрузки: ${escapeHtml(err.message)}</p></div>`;
 });

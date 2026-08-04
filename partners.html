@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЦВЗ — Партнёры (служебная)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #072139;
+      --red: #f11c23;
+      --bg: #f4f7fb;
+      --text: #072139;
+      --muted: #5a6f84;
+      --line: rgba(7, 33, 57, 0.12);
+      --surface: #fff;
+      --font: "Manrope", system-ui, sans-serif;
+      --display: "Unbounded", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: var(--font); color: var(--text);
+      background: radial-gradient(800px 400px at 0% 0%, rgba(241,28,35,.08), transparent), var(--bg);
+    }
+    .wrap { width: min(900px, calc(100% - 28px)); margin: 0 auto; padding: 24px 0 60px; }
+    h1 { font-family: var(--display); font-size: 1.4rem; font-weight: 500; margin: 0 0 8px; }
+    .muted { color: var(--muted); font-size: .92rem; }
+    .panel {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px; margin-top: 16px; box-shadow: 0 10px 30px rgba(7,33,57,.08);
+    }
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    label { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    input, textarea, button, select { font: inherit; }
+    input, textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    textarea { min-height: 70px; resize: vertical; }
+    .btn {
+      border: none; border-radius: 12px; padding: 11px 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn-primary { background: var(--red); color: #fff; }
+    .btn-ghost { background: transparent; border: 1px solid var(--line); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .card {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px;
+      background: #fafcfe;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 1rem; }
+    .mono { font-family: ui-monospace, monospace; font-size: .85rem; word-break: break-all; }
+    .hidden { display: none !important; }
+    .warn {
+      background: #fff4f4; border: 1px solid #f5c2c2; color: #7a1d1d;
+      padding: 10px 12px; border-radius: 10px; font-size: .88rem; margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>ЦВЗ — Партнёры</h1>
+    <p class="muted">Служебная страница: генерация персональных ссылок и MAX партнёров. Не для кандидатов.</p>
+
+    <div class="panel" id="gate">
+      <div class="field">
+        <label for="pass">Пароль</label>
+        <input id="pass" type="password" placeholder="Пароль доступа" />
+      </div>
+      <button class="btn btn-primary" id="enterBtn">Войти</button>
+      <p class="warn">Это «замок от случайных глаз», не банковская защита. Ссылку на страницу не публикуйте.</p>
+    </div>
+
+    <div id="app" class="hidden">
+      <div class="panel">
+        <h2 style="margin:0 0 12px;font-size:1rem;">Новый партнёр</h2>
+        <div class="field">
+          <label for="name">Имя / компания</label>
+          <input id="name" type="text" placeholder="Иван / ООО Ромашка" />
+        </div>
+        <div class="field">
+          <label for="maxUrl">Ссылка на MAX партнёра</label>
+          <input id="maxUrl" type="url" placeholder="https://max.ru/u/..." />
+        </div>
+        <div class="field">
+          <label for="comment">Комментарий для нас</label>
+          <textarea id="comment" placeholder="Условия, кто привёл, заметки..."></textarea>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary" id="createBtn">Создать ссылку</button>
+          <button class="btn btn-ghost" id="exportBtn">Скачать partners-data.json</button>
+          <label class="btn btn-ghost" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+            Загрузить JSON
+            <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+          </label>
+        </div>
+        <p class="muted" style="margin-top:10px;">
+          После создания скачайте JSON и пришлите Кате/в чат разработки — зальём на сайт, чтобы ссылка партнёра подхватила его MAX.
+          Локально список хранится в этом браузере.
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2 style="margin:0 0 8px;font-size:1rem;">Список партнёров</h2>
+        <div id="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="bitrix-config.js"></script>
+  <script>
+    const STORAGE_KEY = "cvz_partners_v1";
+    const baseSearchUrl = location.origin + location.pathname.replace(/partners\.html$/i, "") + (location.pathname.endsWith("/") ? "" : "/").replace("//", "/");
+    // Prefer index path
+    function searchBase() {
+      const u = new URL(location.href);
+      u.pathname = u.pathname.replace(/partners\.html$/i, "index.html");
+      if (u.pathname.endsWith("/")) u.pathname += "index.html";
+      u.search = "";
+      u.hash = "";
+      return u.toString().replace(/index\.html$/, "").replace(/\/?$/, "/");
+    }
+
+    function loadPartners() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"items":[]}'); }
+      catch { return { items: [] }; }
+    }
+    function savePartners(data) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    function uid() {
+      const a = Math.random().toString(36).slice(2, 8);
+      const b = Date.now().toString(36).slice(-4);
+      return (a + b).toLowerCase();
+    }
+    function partnerUrl(code) {
+      return `${searchBase()}?p=${encodeURIComponent(code)}`;
+    }
+
+    function render() {
+      const data = loadPartners();
+      const list = document.getElementById("list");
+      if (!data.items.length) {
+        list.innerHTML = `<p class="muted">Пока пусто.</p>`;
+        return;
+      }
+      list.innerHTML = data.items.slice().reverse().map((p) => `
+        <div class="card">
+          <h3>${escapeHtml(p.name)} ${p.active === false ? "(выкл)" : ""}</h3>
+          <div class="mono">${escapeHtml(partnerUrl(p.code))}</div>
+          <div class="muted" style="margin-top:6px">MAX: ${escapeHtml(p.maxUrl || "—")}</div>
+          <div class="muted">Код: ${escapeHtml(p.code)}</div>
+          <div class="muted">${escapeHtml(p.comment || "")}</div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn btn-ghost" data-copy="${escapeHtml(partnerUrl(p.code))}">Копировать ссылку</button>
+            <button class="btn btn-ghost" data-toggle="${escapeHtml(p.code)}">${p.active === false ? "Включить" : "Выключить"}</button>
+            <button class="btn btn-ghost" data-del="${escapeHtml(p.code)}">Удалить</button>
+          </div>
+        </div>
+      `).join("");
+
+      list.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(b.dataset.copy);
+        alert("Ссылка скопирована");
+      }));
+      list.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {
+        const data = loadPartners();
+        const item = data.items.find((x) => x.code === b.dataset.toggle);
+        if (!item) return;
+        item.active = item.active === false;
+        savePartners(data);
+        render();
+      }));
+      list.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => {
+        if (!confirm("Удалить партнёра?")) return;
+        const data = loadPartners();
+        data.items = data.items.filter((x) => x.code !== b.dataset.del);
+        savePartners(data);
+        render();
+      }));
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    document.getElementById("enterBtn").addEventListener("click", () => {
+      const pass = document.getElementById("pass").value;
+      const expected = window.CVZ_PARTNERS_PASS || "";
+      if (pass !== expected) {
+        alert("Неверный пароль");
+        return;
+      }
+      document.getElementById("gate").classList.add("hidden");
+      document.getElementById("app").classList.remove("hidden");
+      // seed from server file if local empty
+      const local = loadPartners();
+      if (!local.items.length) {
+        fetch("partners-data.json?t=" + Date.now()).then(r => r.json()).then((d) => {
+          if (d.items && d.items.length) savePartners(d);
+          render();
+        }).catch(render);
+      } else render();
+    });
+
+    document.getElementById("createBtn").addEventListener("click", () => {
+      const name = document.getElementById("name").value.trim();
+      const maxUrl = document.getElementById("maxUrl").value.trim();
+      const comment = document.getElementById("comment").value.trim();
+      if (!name || !maxUrl) {
+        alert("Нужны имя и ссылка MAX");
+        return;
+      }
+      const data = loadPartners();
+      const code = uid();
+      data.items.push({
+        code, name, maxUrl, comment,
+        active: true,
+        createdAt: new Date().toISOString()
+      });
+      savePartners(data);
+      document.getElementById("name").value = "";
+      document.getElementById("maxUrl").value = "";
+      document.getElementById("comment").value = "";
+      render();
+      navigator.clipboard.writeText(partnerUrl(code)).catch(() => {});
+      alert("Партнёр создан. Ссылка скопирована.\nНе забудьте скачать JSON и залить на сайт.");
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const data = loadPartners();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "partners-data.json";
+      a.click();
+    });
+
+    document.getElementById("importFile").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!Array.isArray(data.items)) throw new Error("Неверный формат");
+      savePartners(data);
+      render();
+      alert("Загружено");
+    });
+  </script>
+</body>
+</html>

@@ -113,12 +113,21 @@ def main():
             max_place = re.sub(r"\s+", " ", max_place).strip(" ·,-")
 
         if dol_one and max_place:
-            title = f"{dol_one} на {max_place[0].lower() + max_place[1:] if len(max_place) > 1 else max_place.lower()}"
+            place_part = max_place[0].lower() + max_place[1:] if len(max_place) > 1 else max_place.lower()
+            title = f"{dol_one} на {place_part}"
         elif max_place:
             title = max_place
         else:
             title = dol_one
         title = re.sub(r"\s+", " ", title).strip(" ·,-")
+        try:
+            id_num = int(float(vid)) if isinstance(vid, (int, float)) else str(vid).strip()
+        except (TypeError, ValueError):
+            id_num = str(vid).strip()
+        if title:
+            title = f"{title} (ID: {id_num})"
+        else:
+            title = f"(ID: {id_num})"
 
         try:
             age_from = int(float(row.get("от") or 18))

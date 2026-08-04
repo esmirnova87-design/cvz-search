@@ -1,0 +1,19 @@
+// Конфиг Битрикс. ВНИМАНИЕ: на GitHub Pages файл публичный.
+// Права вебхука держите минимальными; ключ можно перевыпустить в Битрикс.
+window.CVZ_BITRIX = {
+  webhookBase: "https://v-vahta.bitrix24.ru/rest/1/9bsig65pwum7el3a",
+  categoryId: 0, // воронка «Соискатели»
+  stageId: "NEW", // стадия «Отклики»
+  fields: {
+    fio: "UF_CRM_1763835920800",
+    phone: "UF_CRM_1775735854411",
+    citizenship: "UF_CRM_1763837083560",
+    age: "UF_CRM_1763837128341",
+    region: "UF_CRM_1763837595450",
+    objectName: "UF_CRM_1779635516",
+    vacancyUrl: "UF_CRM_1766655105"
+  }
+};
+
+// Пароль страницы партнёров (слабая защита «от случайных глаз»)
+window.CVZ_PARTNERS_PASS = "cvz-partners-2026";
