@@ -416,9 +416,7 @@ async function sendBitrixDeal() {
   if (!age || !citizenId || !regionId) throw new Error("Укажите возраст, гражданство и регион");
 
   const vac = pendingApplyVacancy;
-  const title = vac
-    ? `Сайт ЦВЗ: ${vac.title}`
-    : `Сайт ЦВЗ: отклик от ${fio}`;
+  const title = `Отклик с ЦВЗ сайта: ${fio}, ${age}`;
   const comments = [
     "Источник: сайт поиска ЦВЗ",
     vac ? `Вакансия: ${vac.title}` : "",
@@ -428,11 +426,39 @@ async function sendBitrixDeal() {
     `Возраст: ${age}`,
   ].filter(Boolean).join("\n");
 
+  const nameParts = fio.split(/\s+/).filter(Boolean);
+  const contactFields = {
+    OPENED: "Y",
+    TYPE_ID: "CLIENT",
+    SOURCE_DESCRIPTION: "Сайт ЦВЗ",
+    PHONE: [{ VALUE: phone, VALUE_TYPE: "MOBILE" }]
+  };
+  if (nameParts.length === 1) {
+    contactFields.NAME = nameParts[0];
+  } else if (nameParts.length === 2) {
+    contactFields.LAST_NAME = nameParts[0];
+    contactFields.NAME = nameParts[1];
+  } else {
+    contactFields.LAST_NAME = nameParts[0];
+    contactFields.NAME = nameParts[1];
+    contactFields.SECOND_NAME = nameParts.slice(2).join(" ");
+  }
+
+  const contactRes = await fetch(`${cfg.webhookBase}/crm.contact.add.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: contactFields })
+  }).then((r) => r.json());
+  if (contactRes.error) throw new Error(contactRes.error_description || contactRes.error);
+  const contactId = contactRes.result;
+  if (!contactId) throw new Error("Не удалось создать контакт");
+
   const fields = cfg.fields || {};
   const dealFields = {
     TITLE: title,
     CATEGORY_ID: cfg.categoryId,
     STAGE_ID: cfg.stageId,
+    CONTACT_ID: contactId,
     COMMENTS: comments,
     SOURCE_DESCRIPTION: "Сайт ЦВЗ",
     OPENED: "Y"
@@ -440,28 +466,11 @@ async function sendBitrixDeal() {
   if (fields.fio) dealFields[fields.fio] = fio;
   if (fields.phone) dealFields[fields.phone] = phone;
   if (fields.citizenship) dealFields[fields.citizenship] = citizenId;
-  if (fields.age) dealFields[fields.age] = ageToBitrixId(age);
+  if (fields.ageEnum) dealFields[fields.ageEnum] = ageToBitrixId(age);
+  if (fields.ageAvito) dealFields[fields.ageAvito] = String(age);
   if (fields.region) dealFields[fields.region] = regionId;
   if (fields.objectName && vac) dealFields[fields.objectName] = vac.title;
   if (fields.vacancyUrl) dealFields[fields.vacancyUrl] = location.href.split("?")[0];
-
-  // контакт с телефоном + сделка
-  const contactPayload = {
-    fields: {
-      NAME: fio,
-      OPENED: "Y",
-      TYPE_ID: "CLIENT",
-      SOURCE_DESCRIPTION: "Сайт ЦВЗ",
-      PHONE: [{ VALUE: phone, VALUE_TYPE: "MOBILE" }]
-    }
-  };
-  const contactRes = await fetch(`${cfg.webhookBase}/crm.contact.add.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(contactPayload)
-  }).then((r) => r.json());
-  if (contactRes.error) throw new Error(contactRes.error_description || contactRes.error);
-  if (contactRes.result) dealFields.CONTACT_ID = contactRes.result;
 
   const dealRes = await fetch(`${cfg.webhookBase}/crm.deal.add.json`, {
     method: "POST",
@@ -469,7 +478,17 @@ async function sendBitrixDeal() {
     body: JSON.stringify({ fields: dealFields })
   }).then((r) => r.json());
   if (dealRes.error) throw new Error(dealRes.error_description || dealRes.error);
-  return dealRes.result;
+
+  const dealId = dealRes.result;
+  // явное привязывание контакта к сделке
+  if (dealId && contactId) {
+    await fetch(`${cfg.webhookBase}/crm.deal.contact.add.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: dealId, fields: { CONTACT_ID: contactId, IS_PRIMARY: "Y" } })
+    }).catch(() => {});
+  }
+  return dealId;
 }
 
 function escapeHtml(s) {
