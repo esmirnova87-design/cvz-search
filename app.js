@@ -465,7 +465,7 @@ async function sendBitrixDeal() {
     STAGE_ID: cfg.stageId,
     CONTACT_ID: contactId,
     COMMENTS: comments,
-    SOURCE_DESCRIPTION: "Сайт ЦВЗ",
+    SOURCE_DESCRIPTION: vacId ? `Сайт ЦВЗ, ID вакансии: ${vacId}` : "Сайт ЦВЗ",
     OPENED: "Y"
   };
   if (fields.fio) dealFields[fields.fio] = fio;
