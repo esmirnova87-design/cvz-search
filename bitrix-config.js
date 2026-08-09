@@ -30,7 +30,7 @@ window.CVZ_BITRIX = {
     consentAt: "UF_CRM_CVZ_CONSENT_AT",
     consentVer: "UF_CRM_CVZ_CONSENT_VER"
   },
-  docsVersion: "2026-08-09-v1",
+  docsVersion: "2026-08-09-v2",
   roleEnum: {
     candidate: "652",
     freelancer: "654",
