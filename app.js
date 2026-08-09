@@ -823,6 +823,17 @@ function openApplyModal(vacancyId) {
   if (pendingApplyVacancy) label.textContent = `Вакансия: ${pendingApplyVacancy.title}`;
   else if (pendingApplyVacancyId) label.textContent = `Отклик на вакансию ID: ${pendingApplyVacancyId}`;
   else label.textContent = "Оставьте данные — создадим заявку в Битрикс.";
+  const pdn = document.getElementById("applyPdn");
+  const terms = document.getElementById("applyTerms");
+  if (pdn) pdn.checked = false;
+  if (terms) terms.checked = false;
+  try {
+    const session = JSON.parse(localStorage.getItem("cvz_lk_v1") || "null");
+    if (session) {
+      if (session.fio) document.getElementById("fio").value = session.fio;
+      if (session.phone) document.getElementById("phone").value = formatPhone(session.phone);
+    }
+  } catch (_) {}
   applyModal.classList.add("show");
 }
 
@@ -852,11 +863,18 @@ function isValidPhone(value) {
 
 function bindPhoneMask() {
   const phone = document.getElementById("phone");
+  if (!phone) return;
+  phone.addEventListener("keydown", (e) => {
+    const ok = ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "Home", "End"];
+    if (ok.includes(e.key) || e.ctrlKey || e.metaKey) return;
+    if (!/^\d$/.test(e.key)) e.preventDefault();
+  });
+  phone.addEventListener("paste", (e) => {
+    e.preventDefault();
+    phone.value = formatPhone((e.clipboardData || window.clipboardData).getData("text"));
+  });
   phone.addEventListener("input", () => {
-    const start = phone.selectionStart;
     phone.value = formatPhone(phone.value);
-    try { phone.setSelectionRange(phone.value.length, phone.value.length); } catch (_) {}
-    void start;
   });
 }
 
@@ -1005,6 +1023,8 @@ async function loadData() {
   allVacancies = data.items || [];
   fillRegionsFromData();
   renderCheckList(document.getElementById("typeBox"), objectTypes);
+  if (!peopleEl.querySelector(".person")) addPerson();
+  loadSavedFilters();
   runSearch();
 }
 
@@ -1023,6 +1043,65 @@ function resetFilters() {
   addPerson();
   runSearch();
   showToast("Фильтры сброшены");
+}
+
+const FILTERS_KEY = "cvz_saved_filters_v1";
+
+function snapshotFilters() {
+  const people = [...peopleEl.querySelectorAll(".person")].map((p) => ({
+    citizen: p.querySelector("[data-citizen]")?.value || "",
+    gender: p.querySelector("[data-gender]")?.value || "",
+    age: p.querySelector("[data-age]")?.value || "",
+    payMode: p.querySelector("[data-pay-mode]")?.value || "",
+    jobs: checkedValues(p.querySelector("[data-jobs]"))
+  }));
+  return {
+    regions: checkedValues(document.getElementById("regionBox")),
+    types: checkedValues(document.getElementById("typeBox")),
+    housing: document.getElementById("housing").checked,
+    food: document.getElementById("food").checked,
+    noSb: document.getElementById("noSb").checked,
+    noMed: document.getElementById("noMed").checked,
+    shortShift: document.getElementById("shortShift").checked,
+    keyword: (document.getElementById("keywordSearch")?.value || "").trim(),
+    people
+  };
+}
+
+function applySnapshot(snap) {
+  if (!snap) return;
+  fillRegionsFromData();
+  renderCheckList(document.getElementById("typeBox"), objectTypes);
+  const setChecks = (box, values) => {
+    box.querySelectorAll("input[type=checkbox]").forEach((inp) => {
+      inp.checked = (values || []).includes(inp.value);
+    });
+  };
+  setChecks(document.getElementById("regionBox"), snap.regions);
+  setChecks(document.getElementById("typeBox"), snap.types);
+  document.getElementById("housing").checked = !!snap.housing;
+  document.getElementById("food").checked = !!snap.food;
+  document.getElementById("noSb").checked = !!snap.noSb;
+  document.getElementById("noMed").checked = !!snap.noMed;
+  document.getElementById("shortShift").checked = !!snap.shortShift;
+  const kw = document.getElementById("keywordSearch");
+  if (kw) kw.value = snap.keyword || "";
+  peopleEl.innerHTML = "";
+  personSeq = 0;
+  const people = snap.people && snap.people.length ? snap.people : [{}];
+  people.forEach((preset) => addPerson(preset));
+}
+
+function saveFilters() {
+  localStorage.setItem(FILTERS_KEY, JSON.stringify(snapshotFilters()));
+  showToast("Фильтры сохранены на этом устройстве");
+}
+
+function loadSavedFilters() {
+  try {
+    const snap = JSON.parse(localStorage.getItem(FILTERS_KEY) || "null");
+    if (snap) applySnapshot(snap);
+  } catch (_) {}
 }
 
 document.getElementById("themeToggle").addEventListener("click", () => {
@@ -1047,6 +1126,7 @@ document.getElementById("keywordSearch")?.addEventListener("keydown", (e) => {
 document.getElementById("viewList")?.addEventListener("click", () => setView("list"));
 document.getElementById("viewMap")?.addEventListener("click", () => setView("map"));
 document.getElementById("resetFilters").addEventListener("click", resetFilters);
+document.getElementById("saveFilters")?.addEventListener("click", saveFilters);
 document.getElementById("copyAll").addEventListener("click", () => {
   if (!lastResults.length) {
     showToast("Нечего копировать");
@@ -1094,11 +1174,21 @@ document.getElementById("applySend").addEventListener("click", async () => {
   const btn = document.getElementById("applySend");
   btn.disabled = true;
   try {
+    if (!document.getElementById("applyPdn")?.checked) {
+      throw new Error("Нужно согласие на обработку персональных данных");
+    }
+    if (!document.getElementById("applyTerms")?.checked) {
+      throw new Error("Нужно принять Пользовательское соглашение");
+    }
     await sendBitrixDeal();
     applyModal.classList.remove("show");
     document.getElementById("fio").value = "";
     document.getElementById("phone").value = "";
     document.getElementById("applyAge").value = "";
+    const pdn = document.getElementById("applyPdn");
+    const terms = document.getElementById("applyTerms");
+    if (pdn) pdn.checked = false;
+    if (terms) terms.checked = false;
     showToast("Заявка принята, напишем в MAX/позвоним");
   } catch (err) {
     console.error(err);

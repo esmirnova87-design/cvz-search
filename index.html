@@ -396,6 +396,13 @@
     }
     .site-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
     .site-footer a:hover { color: var(--heading); }
+    .consent-line {
+      display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start;
+      margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+      font-size: .88rem; line-height: 1.4;
+    }
+    .consent-line input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--red); }
+    .consent-line a { color: var(--heading); }
     .pay-type {
       display: block;
       margin-top: 4px;
@@ -493,6 +500,7 @@
         <div class="actions">
           <button type="button" class="btn btn-ghost" id="addPerson">+ ещё один</button>
           <button type="button" class="btn btn-primary" id="searchBtn">Показать варианты</button>
+          <button type="button" class="btn btn-ghost" id="saveFilters">Сохранить фильтры</button>
           <button type="button" class="btn btn-ghost" id="resetFilters">Сбросить фильтры</button>
         </div>
       </aside>
@@ -563,6 +571,14 @@
         <label class="lbl" for="applyRegion">Регион проживания</label>
         <select id="applyRegion"></select>
       </div>
+      <label class="consent-line">
+        <input type="checkbox" id="applyPdn" />
+        <span>Даю согласие на обработку моих персональных данных в соответствии с <a href="info.html#privacy" target="_blank" rel="noopener">Политикой обработки персональных данных</a></span>
+      </label>
+      <label class="consent-line">
+        <input type="checkbox" id="applyTerms" />
+        <span>Я подтверждаю, что ознакомился с условиями <a href="info.html#terms" target="_blank" rel="noopener">Пользовательского соглашения</a>, принимаю их в полном объёме и обязуюсь соблюдать</span>
+      </label>
       <div class="modal-actions">
         <button type="button" class="btn btn-ghost" id="applyCancel">Отмена</button>
         <button type="button" class="btn btn-primary" id="applySend">Отправить</button>
@@ -582,6 +598,6 @@
   <script src="vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js"></script>
-  <script src="app.js?v=mvp2"></script>
+  <script src="app.js?v=mvp3"></script>
 </body>
 </html>
