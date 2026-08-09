@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Политика обработки персональных данных — ЦВЗ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0; font-family: "Manrope", system-ui, sans-serif; color: #072139;
+      background: #f4f7fb; line-height: 1.55;
+    }
+    .bar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+      padding: 12px 18px; background: #072139; color: #fff;
+    }
+    .bar a { color: #ffb4b7; }
+    .btn {
+      border: none; border-radius: 10px; padding: 9px 12px; font-weight: 700; cursor: pointer;
+      background: #f11c23; color: #fff; text-decoration: none; font: inherit;
+    }
+    .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,.25); color: #fff; }
+    .sheet {
+      width: min(720px, calc(100% - 28px)); margin: 20px auto 48px; background: #fff;
+      border-radius: 12px; padding: 28px 26px; box-shadow: 0 10px 30px rgba(7,33,57,.08);
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; }
+    .meta { color: #5a6f84; font-size: .9rem; margin: 0 0 18px; }
+    h2 { font-size: 1rem; margin: 18px 0 6px; }
+    p { margin: 0 0 10px; font-size: .95rem; }
+    @media print {
+      .bar { display: none; }
+      .sheet { box-shadow: none; margin: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div>ЦВЗ · Политика обработки персональных данных</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn" id="dl">Скачать</button>
+      <button type="button" class="btn btn-ghost" onclick="window.print()">Печать / PDF</button>
+      <a class="btn btn-ghost" href="info.html">К информации</a>
+    </div>
+  </div>
+  <article class="sheet" id="doc">
+    <h1>Политика обработки персональных данных</h1>
+    <p class="meta">Версия: 2026-08-09-v2. Оператор — самозанятый (НПД), юрлица нет. Пробелы ________ заполняются оператором.</p>
+
+    <h2>1. Оператор</h2>
+    <p>Оператор персональных данных: физическое лицо — плательщик налога на профессиональный доход (самозанятый) ________ (ФИО полностью), ИНН ________, регион постановки на учёт ________.</p>
+    <p>Контакт для обращений по ПД: ________@________, чат MAX: ________.</p>
+    <p>Юридического лица (ООО и т.п.) у оператора нет; деятельность ведётся в статусе самозанятого.</p>
+
+    <h2>2. Какие данные обрабатываем</h2>
+    <p>ФИО, телефон, возраст, гражданство, регион, иные сведения, которые пользователь указывает при регистрации, входе, отклике, опросе, переписке; технические данные (дата/время согласия, версия документов, служебные логи CRM).</p>
+
+    <h2>3. Цели обработки</h2>
+    <p>Регистрация и вход в личный кабинет; подбор и предложение вакансий; создание обращений в CRM; партнёрская/реферальная программа; связь с пользователем; исполнение договорённостей; улучшение сервиса; соблюдение закона.</p>
+
+    <h2>4. Правовые основания</h2>
+    <p>Согласие субъекта ПД; необходимость исполнения соглашения с пользователем; законные интересы оператора в части безопасности и учёта обращений — в пределах 152‑ФЗ.</p>
+
+    <h2>5. Способы и действия</h2>
+    <p>Сбор, запись, систематизация, хранение, уточнение, использование, передача (см. п. 6), обезличивание, блокирование, удаление.</p>
+
+    <h2>6. Передача третьим лицам</h2>
+    <p>Сотрудникам/помощникам ЦВЗ (при наличии); в CRM Bitrix24; при необходимости трудоустройства — заказчику/площадке в объёме, нужном для оформления; провайдерам хостинга сайта. Заказчик и точные адреса объектов в публичной витрине не публикуются.</p>
+
+    <h2>7. Срок хранения</h2>
+    <p>До отзыва согласия, удаления кабинета или достижения целей обработки, если иной срок не требуется законом.</p>
+
+    <h2>8. Права субъекта</h2>
+    <p>Запросить доступ, уточнение, ограничение, удаление/отзыв согласия — через контакты в п. 1. Отзыв не влияет на законность обработки до момента отзыва.</p>
+
+    <h2>9. Защита</h2>
+    <p>Организационные и технические меры, доступ по необходимости, учёт согласий (дата/время, версия текста документов).</p>
+
+    <h2>10. Изменения политики</h2>
+    <p>Новая редакция публикуется по адресу этой страницы с новой датой/версией и действует с момента публикации, если иное не указано.</p>
+  </article>
+  <script>
+    document.getElementById("dl").onclick = () => {
+      const text = document.getElementById("doc").innerText;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+      a.download = "CVZ-politika-obrabotki-PD-v2.txt";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  </script>
+</body>
+</html>
