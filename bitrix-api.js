@@ -134,13 +134,15 @@
     };
   }
 
-  async function registerContact({ fio, phone, password, role, refId }) {
+  async function registerContact({ fio, phone, password, role, refId, consentAt, consentVer }) {
     if (!isValidPhone(phone)) throw new Error("Телефон в формате +7 (999) 999-99-99");
     if (!password || password.length < 4) throw new Error("Пароль от 4 символов");
     const existing = await findContactByPhone(phone);
     const f = contactFieldsMap();
     const hash = await hashPassword(phone, password);
     const wantRole = role === "admin" ? "admin" : "candidate";
+    const at = consentAt || new Date().toISOString();
+    const ver = consentVer || cfg().docsVersion || "v1";
 
     if (existing) {
       const meta = readContactMeta(existing);
@@ -151,6 +153,8 @@
         [f.role]: roleEnumId(wantRole),
         [f.level]: meta.level || 0
       };
+      if (f.consentAt) fields[f.consentAt] = at;
+      if (f.consentVer) fields[f.consentVer] = ver;
       if (refId && f.refId) fields[f.refId] = String(refId);
       if (cfg().assignedById) fields.ASSIGNED_BY_ID = cfg().assignedById;
       await bitrix("crm.contact.update", { id: existing.ID, fields });
@@ -168,6 +172,8 @@
       [f.role]: roleEnumId(wantRole),
       [f.level]: 0
     };
+    if (f.consentAt) fields[f.consentAt] = at;
+    if (f.consentVer) fields[f.consentVer] = ver;
     if (refId && f.refId) fields[f.refId] = String(refId);
     if (cfg().assignedById) fields.ASSIGNED_BY_ID = cfg().assignedById;
     const id = await bitrix("crm.contact.add", { fields });

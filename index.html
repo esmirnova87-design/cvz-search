@@ -390,6 +390,12 @@
     html[data-theme="dark"] .duty { color: #d7e2ec; }
     .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .bottom-bar { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .site-footer {
+      width: min(1280px, calc(100% - 28px)); margin: 24px auto 40px; padding-top: 16px;
+      border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: .82rem;
+    }
+    .site-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+    .site-footer a:hover { color: var(--heading); }
     .pay-type {
       display: block;
       margin-top: 4px;
@@ -565,6 +571,12 @@
   </div>
 
   <div class="toast" id="toast">Скопировано</div>
+
+  <footer class="site-footer">
+    <a href="info.html#privacy">Политика обработки персональных данных</a>
+    <a href="info.html#terms">Пользовательское соглашение</a>
+    <a href="info.html">Информация</a>
+  </footer>
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/leaflet.markercluster/leaflet.markercluster.js"></script>

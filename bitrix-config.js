@@ -26,8 +26,11 @@ window.CVZ_BITRIX = {
     role: "UF_CRM_CVZ_ROLE",
     flOk: "UF_CRM_CVZ_FL_OK",
     refId: "UF_CRM_CVZ_REF_ID",
-    level: "UF_CRM_CVZ_LEVEL"
+    level: "UF_CRM_CVZ_LEVEL",
+    consentAt: "UF_CRM_CVZ_CONSENT_AT",
+    consentVer: "UF_CRM_CVZ_CONSENT_VER"
   },
+  docsVersion: "2026-08-09-v1",
   roleEnum: {
     candidate: "652",
     freelancer: "654",

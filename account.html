@@ -125,6 +125,12 @@
       cursor: pointer; font-weight: 700; list-style: none; color: var(--heading);
     }
     details.more > summary::-webkit-details-marker { display: none; }
+    .site-footer {
+      margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line);
+      display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: .82rem;
+    }
+    .site-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+    .site-footer a:hover { color: var(--heading); }
   </style>
 </head>
 <body>
@@ -167,11 +173,11 @@
       <div id="consentBlock" class="hidden">
         <label class="consent">
           <input type="checkbox" id="pdn" />
-          <span>Даю согласие на обработку персональных данных (ПД) для регистрации, входа и подбора вакансий.</span>
+          <span>Даю согласие на обработку моих персональных данных в соответствии с <a href="info.html#privacy" target="_blank" rel="noopener">Политикой обработки персональных данных</a></span>
         </label>
         <label class="consent">
           <input type="checkbox" id="terms" />
-          <span>Принимаю условия сервиса и документы ЦВЗ (<a href="info.html#docs" target="_blank" rel="noopener">открыть</a>).</span>
+          <span>Я подтверждаю, что ознакомился с условиями <a href="info.html#terms" target="_blank" rel="noopener">Пользовательского соглашения</a>, принимаю их в полном объёме и обязуюсь соблюдать</span>
         </label>
       </div>
 
@@ -186,6 +192,12 @@
       <div id="tabAdmin" class="hidden"></div>
       <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:14px">Выйти</button>
     </div>
+
+    <footer class="site-footer">
+      <a href="info.html#privacy">Политика обработки персональных данных</a>
+      <a href="info.html#terms">Пользовательское соглашение</a>
+      <a href="info.html">Информация</a>
+    </footer>
   </div>
   <div class="toast" id="toast"></div>
 
@@ -708,10 +720,14 @@
         } else {
           const fio = document.getElementById("fio").value.trim();
           if (!fio) throw new Error("Укажите ФИО");
-          if (!document.getElementById("pdn").checked) throw new Error("Нужно согласие на обработку ПД");
-          if (!document.getElementById("terms").checked) throw new Error("Нужно принять условия сервиса");
+          if (!document.getElementById("pdn").checked) throw new Error("Нужно согласие на обработку персональных данных");
+          if (!document.getElementById("terms").checked) throw new Error("Нужно принять Пользовательское соглашение");
           const ref = new URLSearchParams(location.search).get("ref") || "";
-          meta = await CVZ_BX.registerContact({ fio, phone, password, role: "candidate", refId: ref });
+          const consentAt = new Date().toISOString();
+          const consentVer = (window.CVZ_BITRIX && window.CVZ_BITRIX.docsVersion) || "v1";
+          meta = await CVZ_BX.registerContact({
+            fio, phone, password, role: "candidate", refId: ref, consentAt, consentVer
+          });
         }
         let localAdmin = false;
         const ap = document.getElementById("adminPass").value;
