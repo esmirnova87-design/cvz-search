@@ -23,19 +23,46 @@ const objectTypes = [
   { id: "ферма", label: "Ферма" }
 ];
 
-const jobsM = [
-  "грузчик", "разнорабочий", "комплектовщик", "комплектовщик с тсд", "упаковщик",
-  "сборщик", "оператор линии", "фасовщик", "укладчик", "мойщик", "транспортировщик",
-  "работник склада", "водитель вэш", "водитель вап", "водитель ричтрака",
-  "водитель погрузчика", "водитель штабелера", "подсобный рабочий", "слесарь",
-  "повар", "уборщик", "маркировщик", "вэш", "вап", "ричтрак"
+const jobsMGroups = [
+  { id: "любая", label: "любая", aliases: [] },
+  { id: "грузчик", label: "грузчик/транспортировщик", aliases: ["грузчик", "транспортировщик"] },
+  { id: "разнорабочий", label: "разнорабочий/работник склада/подсобный рабочий/кладовщик", aliases: ["разнорабочий", "работник склада", "подсобный рабочий", "кладовщик"] },
+  { id: "повар", label: "повар/кондитер/помощник повара/помощник кондитера/кухонный работник", aliases: ["повар", "кондитер", "помощник повара", "помощник кондитера", "кухонный работник"] },
+  { id: "мойщик", label: "мойщик/котломойщик/протирщик/дворник", aliases: ["мойщик", "котломойщик", "протирщик", "дворник"] },
+  { id: "оператор линии", label: "оператор линии/работник линии", aliases: ["оператор линии", "работник линии"] },
+  { id: "комплектовщик", label: "комплектовщик/сборщик/наборщик/сканировщик", aliases: ["комплектовщик", "сборщик", "наборщик", "сканировщик"] },
+  { id: "маркировщик", label: "маркировщик/стикеровщик", aliases: ["маркировщик", "стикеровщик", "маркировщица", "стикеровщица"] },
+  { id: "упаковщик", label: "упаковщик/фасовщик/укладчик", aliases: ["упаковщик", "фасовщик", "укладчик", "упаковщица", "фасовщица"] },
+  { id: "водитель спецтехники", label: "карщик/водитель спецтехники (автопогрузчик/электроштабелер/ричтрак)", aliases: ["карщик", "водитель спецтехники", "автопогрузчик", "электроштабелер", "ричтрак", "вап", "вэш", "штабелер", "погрузчик"] },
+  { id: "официант", label: "официант/хаусмен", aliases: ["официант", "хаусмен"] },
+  { id: "стройка", label: "формовщик/арматурщик/бетонщик/каменщик/маляр/монтажник/монолитчик/наладчик/оператор (оборудования)/пайщик/слесарь/сварщик", aliases: ["формовщик", "арматурщик", "бетонщик", "каменщик", "маляр", "монтажник", "монолитчик", "наладчик", "оператор", "пайщик", "слесарь", "сварщик"] },
+  { id: "мясо", label: "боец скота/жиловщик/навесчик/обвальщик/мясник", aliases: ["боец скота", "жиловщик", "навесчик", "обвальщик", "мясник"] },
+  { id: "животновод", label: "животновод/птицевод/отлов птиц", aliases: ["животновод", "птицевод", "отлов птиц", "отлов питц"] },
+  { id: "кассир", label: "кассир/работник зала", aliases: ["кассир", "работник зала"] },
+  { id: "рыба", label: "рыбообработчик/разборщик/раздельщик", aliases: ["рыбообработчик", "разборщик", "раздельщик"] },
+  { id: "теплицы", label: "цветовод/работник теплиц", aliases: ["цветовод", "работник теплиц"] },
+  { id: "другая", label: "другая", aliases: ["другая"] }
 ];
 
-const jobsF = [
-  "упаковщица", "упаковщик", "комплектовщик", "комплектовщик с тсд", "оператор линии",
-  "фасовщица", "уборщица", "мойщица", "горничная", "повар", "помощник повара",
-  "маркировщица", "стикеровщица", "сортировщица", "швея", "официант", "работник линии", "уборка"
+const jobsFGroups = [
+  { id: "любая", label: "любая", aliases: [] },
+  { id: "разнорабочий", label: "разнорабочий/работник склада", aliases: ["разнорабочий", "работник склада"] },
+  { id: "повар", label: "повар/кондитер/помощник повара/помощник кондитера/кухонный работник", aliases: ["повар", "кондитер", "помощник повара", "помощник кондитера", "кухонный работник"] },
+  { id: "уборщица", label: "уборщица/мойщица/посудомойщица/коренщица", aliases: ["уборщица", "мойщица", "посудомойщица", "коренщица", "уборка", "мойщик"] },
+  { id: "горничная", label: "горничная/гладильщица/официант", aliases: ["горничная", "гладильщица", "официант"] },
+  { id: "оператор линии", label: "оператор линии/работник линии", aliases: ["оператор линии", "работник линии"] },
+  { id: "комплектовщик", label: "комплектовщик/сборщик/наборщик/сканировщик", aliases: ["комплектовщик", "сборщик", "наборщик", "сканировщик", "комплектовщица"] },
+  { id: "упаковщик", label: "упаковщик/фасовщик/укладчик", aliases: ["упаковщик", "фасовщик", "укладчик", "упаковщица", "фасовщица"] },
+  { id: "маркировщик", label: "маркировщик/стикеровщик", aliases: ["маркировщик", "стикеровщик", "маркировщица", "стикеровщица"] },
+  { id: "швея", label: "швея", aliases: ["швея"] },
+  { id: "кассир", label: "кассир/работник зала", aliases: ["кассир", "работник зала"] },
+  { id: "рыба", label: "рыбообработчик", aliases: ["рыбообработчик"] },
+  { id: "теплицы", label: "цветовод/работник теплиц", aliases: ["цветовод", "работник теплиц"] },
+  { id: "другая", label: "другая", aliases: ["другая"] }
 ];
+
+const jobsM = jobsMGroups.filter((g) => g.id !== "любая").map((g) => g.label);
+const jobsF = jobsFGroups.filter((g) => g.id !== "любая").map((g) => g.label);
 
 const citizenAliases = {
   россия: ["россия", "рф"],
@@ -107,30 +134,67 @@ function fillRegionsFromData() {
 
   const regionBox = document.getElementById("regionBox");
   const top = priorityRegions.map((r, idx) =>
-    `<label class="check"><input type="checkbox" id="region_top_${idx}" value="${r}" /> ${r}</label>`
+    `<label class="check" data-region-label="${escapeAttr(r.toLowerCase())}"><input type="checkbox" id="region_top_${idx}" value="${escapeAttr(r)}" /> ${escapeHtml(r)}</label>`
   ).join("");
   const restHtml = rest.map((r, idx) =>
-    `<label class="check"><input type="checkbox" id="region_az_${idx}" value="${r}" /> ${r}</label>`
+    `<label class="check" data-region-label="${escapeAttr(r.toLowerCase())}"><input type="checkbox" id="region_az_${idx}" value="${escapeAttr(r)}" /> ${escapeHtml(r)}</label>`
   ).join("");
   regionBox.innerHTML = `
+    <div class="field" style="margin:0 0 8px">
+      <input type="search" id="regionFilter" placeholder="Поиск региона…" autocomplete="off" />
+    </div>
     <div class="hint" style="margin:0 0 6px">Часто выбирают</div>
     ${top}
     <div class="hint" style="margin:10px 0 6px">Все регионы (А–Я)</div>
     ${restHtml}
   `;
+  const inp = document.getElementById("regionFilter");
+  if (inp) {
+    inp.addEventListener("input", () => {
+      const q = inp.value.trim().toLowerCase().replace(/ё/g, "е");
+      regionBox.querySelectorAll("[data-region-label]").forEach((el) => {
+        const label = (el.getAttribute("data-region-label") || "").replace(/ё/g, "е");
+        el.style.display = !q || label.includes(q) ? "" : "none";
+      });
+    });
+  }
 }
 
 function jobsForGender(g) {
-  if (g === "Ж") return jobsF;
-  if (g === "М") return jobsM;
-  return [...new Set([...jobsM, ...jobsF])];
+  if (g === "Ж") return jobsFGroups;
+  if (g === "М") return jobsMGroups;
+  // merge unique by id
+  const map = new Map();
+  [...jobsMGroups, ...jobsFGroups].forEach((g) => {
+    if (!map.has(g.id)) map.set(g.id, g);
+  });
+  return [...map.values()];
+}
+
+function renderJobGroups(container, groups, { checked = [] } = {}) {
+  container.innerHTML = groups.map((g, idx) => {
+    const isChecked = checked.includes(g.id) || checked.includes(g.label);
+    const id = `${container.id || "jobs"}_${idx}`;
+    return `<label class="check" data-job-label="${escapeAttr(g.label.toLowerCase())}"><input type="checkbox" id="${id}" value="${escapeAttr(g.id)}" data-aliases="${escapeAttr(g.aliases.join("|"))}" ${isChecked ? "checked" : ""} /> ${escapeHtml(g.label)}</label>`;
+  }).join("");
 }
 
 function refreshJobs(person) {
   const gender = person.querySelector("[data-gender]").value;
   const box = person.querySelector("[data-jobs]");
   const prev = [...box.querySelectorAll("input:checked")].map((i) => i.value);
-  renderCheckList(box, jobsForGender(gender), { checked: prev, prefix: "j" });
+  renderJobGroups(box, jobsForGender(gender), { checked: prev });
+  const filter = person.querySelector("[data-jobs-filter]");
+  if (filter) {
+    filter.value = "";
+    filter.oninput = () => {
+      const q = filter.value.trim().toLowerCase().replace(/ё/g, "е");
+      box.querySelectorAll("[data-job-label]").forEach((el) => {
+        const label = (el.getAttribute("data-job-label") || "").replace(/ё/g, "е");
+        el.style.display = !q || label.includes(q) ? "" : "none";
+      });
+    };
+  }
 }
 
 function renumberPeople() {
@@ -180,8 +244,29 @@ function addPerson(preset = null) {
       <label class="lbl">Возраст</label>
       <input type="number" data-age min="18" max="70" placeholder="—" />
     </div>
+    <div class="row2">
+      <div class="field">
+        <label class="lbl">Формат</label>
+        <select data-stay>
+          <option value="">не важно</option>
+          <option value="local">местная (без проживания)</option>
+          <option value="shift">вахта (с проживанием)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="lbl">Оплата</label>
+        <select data-pay-mode>
+          <option value="">фикс или сделка</option>
+          <option value="фикс">только фикс</option>
+          <option value="сделка">только сделка</option>
+        </select>
+      </div>
+    </div>
     <div class="field" style="margin-bottom:6px">
       <label class="lbl">Какие вакансии рассматриваем</label>
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <input type="search" data-jobs-filter placeholder="Поиск должности…" autocomplete="off" />
     </div>
     <div class="check-grid jobs" data-jobs></div>
     <div class="filter-tools row" style="margin-top:8px">
@@ -195,6 +280,8 @@ function addPerson(preset = null) {
     if (preset.citizen) box.querySelector("[data-citizen]").value = preset.citizen;
     if (preset.gender) box.querySelector("[data-gender]").value = preset.gender;
     if (preset.age != null && preset.age !== "") box.querySelector("[data-age]").value = preset.age;
+    if (preset.stay) box.querySelector("[data-stay]").value = preset.stay;
+    if (preset.payMode) box.querySelector("[data-pay-mode]").value = preset.payMode;
   }
 
   refreshJobs(box);
@@ -206,7 +293,10 @@ function addPerson(preset = null) {
 
   box.querySelector("[data-gender]").addEventListener("change", () => refreshJobs(box));
   box.querySelector("[data-jobs-all]").addEventListener("click", () => {
-    box.querySelectorAll("[data-jobs] input").forEach((i) => { i.checked = true; });
+    box.querySelectorAll("[data-jobs] input").forEach((i) => {
+      if (i.closest("label")?.style.display === "none") return;
+      i.checked = true;
+    });
   });
   box.querySelector("[data-jobs-clear]").addEventListener("click", () => {
     box.querySelectorAll("[data-jobs] input").forEach((i) => { i.checked = false; });
@@ -239,10 +329,26 @@ function citizenMatches(selected, vacancyCitizens) {
 
 function jobMatches(selectedJobs, vacancyJobs) {
   if (!selectedJobs.length) return true;
-  const vac = vacancyJobs.map((j) => j.toLowerCase());
+  if (selectedJobs.includes("любая")) return true;
+  const vac = (vacancyJobs || []).map((j) => String(j).toLowerCase().replace(/ё/g, "е"));
+  const vacBlob = vac.join(" ");
+
+  const allAliases = new Set();
+  [...jobsMGroups, ...jobsFGroups].forEach((g) => {
+    if (g.id === "любая" || g.id === "другая") return;
+    g.aliases.forEach((a) => allAliases.add(String(a).toLowerCase().replace(/ё/g, "е")));
+  });
+
   return selectedJobs.some((sj) => {
-    const s = sj.toLowerCase();
-    return vac.some((vj) => vj.includes(s) || s.includes(vj));
+    if (sj === "другая") {
+      return !vac.some((vj) => [...allAliases].some((a) => a && (vj.includes(a) || a.includes(vj))));
+    }
+    const group = [...jobsMGroups, ...jobsFGroups].find((g) => g.id === sj || g.label === sj);
+    const aliases = group ? group.aliases : [sj];
+    return aliases.some((a) => {
+      const s = String(a).toLowerCase().replace(/ё/g, "е");
+      return vac.some((vj) => vj.includes(s) || s.includes(vj)) || vacBlob.includes(s);
+    });
   });
 }
 
@@ -251,18 +357,35 @@ function regionMatches(selectedRegions, vacRegion) {
   return selectedRegions.includes(vacRegion);
 }
 
+function localOkMatches(stay, v) {
+  if (!stay || stay === "shift") return true;
+  if (stay === "local") return v.local_ok !== false;
+  return true;
+}
+
+function payModeMatches(mode, v) {
+  if (!mode) return true;
+  const pt = String(v.pay_type || "").toLowerCase();
+  if (!pt) return true;
+  return pt === mode;
+}
+
 function personFits(personEl, v) {
   const gender = personEl.querySelector("[data-gender]").value;
   const ageRaw = personEl.querySelector("[data-age]").value;
   const age = ageRaw === "" ? 0 : Number(ageRaw);
   const citizen = personEl.querySelector("[data-citizen]").value;
   const jobs = checkedValues(personEl.querySelector("[data-jobs]"));
+  const stay = personEl.querySelector("[data-stay]")?.value || "";
+  const payMode = personEl.querySelector("[data-pay-mode]")?.value || "";
 
   if (gender === "М" && !v.gender_m) return false;
   if (gender === "Ж" && !v.gender_f) return false;
   if (age && (age < v.age_from || age > v.age_to)) return false;
   if (!citizenMatches(citizen, v.citizens || [])) return false;
   if (!jobMatches(jobs, v.jobs || [])) return false;
+  if (!localOkMatches(stay, v)) return false;
+  if (!payModeMatches(payMode, v)) return false;
   return true;
 }
 
@@ -275,8 +398,56 @@ function getFilters() {
     noSb: document.getElementById("noSb").checked,
     noMed: document.getElementById("noMed").checked,
     shortShift: document.getElementById("shortShift").checked,
+    keyword: (document.getElementById("keywordSearch")?.value || "").trim(),
     people: [...peopleEl.querySelectorAll(".person")]
   };
+}
+
+function normalizeSearchText(s) {
+  return String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+}
+
+function vacancyHaystack(v) {
+  const parts = [
+    v.id,
+    v.object_id,
+    v.title,
+    v.place,
+    v.pay,
+    v.region,
+    v.duty,
+    v.copy,
+    v.geo_label,
+    ...(v.jobs || []),
+    ...(v.citizens || []),
+    ...(v.chips || []).map((c) => (typeof c === "string" ? c : c.text))
+  ];
+  const d = v.details || {};
+  for (const val of Object.values(d)) {
+    if (val != null && String(val).trim()) parts.push(String(val));
+  }
+  return normalizeSearchText(parts.join(" "));
+}
+
+function keywordMatches(v, rawQuery) {
+  const q = rawQuery.trim();
+  if (!q) return true;
+
+  const idOnly = q.match(/^(\d+)(?:-(\d+))?$/);
+  if (idOnly) {
+    const cardId = String(v.id ?? "");
+    const objectId = String(v.object_id ?? "");
+    if (idOnly[2]) return cardId === `${idOnly[1]}-${idOnly[2]}`;
+    return objectId === idOnly[1] || cardId === idOnly[1] || cardId.startsWith(`${idOnly[1]}-`);
+  }
+
+  const idInText = q.match(/\bid\s*:?\s*(\d+(?:-\d+)?)/i);
+  if (idInText) return keywordMatches(v, idInText[1]);
+
+  const tokens = normalizeSearchText(q).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  const hay = vacancyHaystack(v);
+  return tokens.every((t) => hay.includes(t));
 }
 
 function filterVacancies() {
@@ -289,6 +460,7 @@ function filterVacancies() {
     if (f.noSb && !v.no_sb) return false;
     if (f.noMed && !v.no_med) return false;
     if (f.shortShift && !v.short_shift) return false;
+    if (f.keyword && !keywordMatches(v, f.keyword)) return false;
     if (f.people.length && !f.people.every((p) => personFits(p, v))) return false;
     return true;
   });
@@ -494,18 +666,26 @@ function renderCards(list) {
 
   if (!list.length) {
     cardsEl.innerHTML = `<div class="card"><p class="duty">По выбранным параметрам вариантов нет. Снимите часть фильтров или расширьте регионы.</p></div>`;
+    updateCopySelectedBtn();
     return;
   }
-  cardsEl.innerHTML = list.map((v, i) => `
+  cardsEl.innerHTML = list.map((v, i) => {
+    const payType = String(v.pay_type || "").toLowerCase();
+    const payTypeLabel = payType === "фикс" || payType === "сделка" ? payType : "";
+    return `
     <article class="card" style="animation-delay:${Math.min(i, 12) * 0.03}s">
       <div class="card-top">
         <div>
+          <label class="check card-pick" style="margin-bottom:8px">
+            <input type="checkbox" data-pick-id="${escapeAttr(String(v.id))}" /> выбрать
+          </label>
           <h3 class="role">${escapeHtml(v.title)}</h3>
           <p class="place">${escapeHtml(v.place || "")}</p>
         </div>
         <div class="pay">
           <strong>${escapeHtml(String(v.pay || "—"))}</strong>
           <span>руб / смена</span>
+          ${payTypeLabel ? `<span class="pay-type">${escapeHtml(payTypeLabel)}</span>` : ""}
         </div>
       </div>
       <div class="meta">${chipHtml(v.chips)}</div>
@@ -519,8 +699,8 @@ function renderCards(list) {
         ${isPartnerLink ? "" : `<button class="btn btn-primary btn-sm" data-apply data-id="${escapeAttr(String(v.id))}">Откликнуться</button>`}
         <a class="btn btn-ghost btn-sm" href="${escapeAttr(partnerChatUrl)}" target="_blank" rel="noopener">Задать вопрос в чате</a>
       </div>
-    </article>
-  `).join("");
+    </article>`;
+  }).join("");
 
   cardsEl.querySelectorAll("[data-copy]").forEach((btn) => {
     btn.addEventListener("click", () => copyText(decodeURIComponent(btn.dataset.copy || "")));
@@ -531,6 +711,23 @@ function renderCards(list) {
   cardsEl.querySelectorAll("[data-more]").forEach((btn) => {
     btn.addEventListener("click", () => openDetailsModal(btn.dataset.id));
   });
+  cardsEl.querySelectorAll("[data-pick-id]").forEach((inp) => {
+    inp.addEventListener("change", updateCopySelectedBtn);
+  });
+  updateCopySelectedBtn();
+}
+
+function selectedVacancies() {
+  const ids = [...cardsEl.querySelectorAll("[data-pick-id]:checked")].map((i) => i.dataset.pickId);
+  return lastResults.filter((v) => ids.includes(String(v.id)));
+}
+
+function updateCopySelectedBtn() {
+  const btn = document.getElementById("copySelected");
+  if (!btn) return;
+  const n = cardsEl.querySelectorAll("[data-pick-id]:checked").length;
+  btn.textContent = n ? `Скопировать выбранные (${n})` : "Скопировать выбранные";
+  btn.disabled = n === 0;
 }
 
 function detailsRows(v) {
@@ -555,6 +752,8 @@ function detailsRows(v) {
     ["Оформление", d.contract],
     ["Спецодежда", d.clothes],
     ["Компенсации", d.compensation],
+    ["Местные", d.local],
+    ["Оплата", d.pay_type],
     ["Должность", d.jobs],
     ["Обязанности", d.duties],
     ["Ставка (нюансы)", d.rate_extra],
@@ -780,6 +979,8 @@ function resetFilters() {
   document.getElementById("noSb").checked = false;
   document.getElementById("noMed").checked = false;
   document.getElementById("shortShift").checked = false;
+  const kw = document.getElementById("keywordSearch");
+  if (kw) kw.value = "";
   peopleEl.innerHTML = "";
   personSeq = 0;
   addPerson();
@@ -800,6 +1001,12 @@ document.getElementById("searchBtn").addEventListener("click", () => {
   const target = currentView === "map" ? document.getElementById("mapPanel") : cardsEl;
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+document.getElementById("keywordSearch")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    runSearch();
+  }
+});
 document.getElementById("viewList")?.addEventListener("click", () => setView("list"));
 document.getElementById("viewMap")?.addEventListener("click", () => setView("map"));
 document.getElementById("resetFilters").addEventListener("click", resetFilters);
@@ -809,6 +1016,14 @@ document.getElementById("copyAll").addEventListener("click", () => {
     return;
   }
   copyText(lastResults.map((v) => v.copy).join("\n\n————\n\n"));
+});
+document.getElementById("copySelected")?.addEventListener("click", () => {
+  const picked = selectedVacancies();
+  if (!picked.length) {
+    showToast("Выберите карточки галочкой");
+    return;
+  }
+  copyText(picked.map((v) => v.copy).join("\n\n————\n\n"));
 });
 
 document.querySelectorAll("[data-select-all]").forEach((btn) => {

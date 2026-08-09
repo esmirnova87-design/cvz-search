@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЦВЗ — Личный кабинет</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root, html[data-theme="dark"] {
+      --red: #f11c23; --bg: linear-gradient(165deg, #072139, #0b2f4d 48%, #051828);
+      --bg-spot-1: rgba(241, 28, 35, 0.18); --text: #fff; --muted: #9db0c2;
+      --line: rgba(255,255,255,.14); --surface: rgba(255,255,255,.06); --input-bg: rgba(5,24,40,.85);
+      --heading: #ffb4b7; --shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+    html[data-theme="light"] {
+      --bg: linear-gradient(165deg, #f4f7fb, #e8eef5); --bg-spot-1: rgba(241,28,35,.08);
+      --text: #072139; --muted: #5a6f84; --line: rgba(7,33,57,.12); --surface: #fff;
+      --input-bg: #fff; --heading: #072139; --shadow: 0 14px 40px rgba(7,33,57,.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; font-family: "Manrope", system-ui, sans-serif; color: var(--text);
+      background: radial-gradient(900px 480px at 8% -8%, var(--bg-spot-1), transparent 55%), var(--bg);
+    }
+    .wrap { width: min(520px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 60px; }
+    h1 { font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 1.35rem; margin: 0 0 8px; }
+    .muted { color: var(--muted); font-size: .92rem; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; box-shadow: var(--shadow); }
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    label.lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    input, select, button, textarea { font: inherit; color: var(--text); }
+    input, select, textarea {
+      width: 100%; background: var(--input-bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    }
+    .btn { border: none; border-radius: 12px; padding: 12px 14px; font-weight: 700; cursor: pointer; }
+    .btn-primary { background: var(--red); color: #fff; width: 100%; }
+    .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .nav a { color: var(--heading); }
+    .check { display: flex; gap: 8px; align-items: flex-start; font-size: .9rem; }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line); padding: 10px 14px; border-radius: 999px; opacity: 0; transition: .25s; }
+    .toast.show { opacity: 1; }
+    #cabinet { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="nav">
+      <a href="index.html">← К поиску</a>
+      <a href="info.html">Информация</a>
+    </div>
+    <h1>Личный кабинет</h1>
+    <p class="muted">Каркас регистрации. Позже подключим хранение в CRM ЦВЗ (Битрикс) без зарубежной оплаты. Сейчас профиль сохраняется локально в браузере для проверки формы.</p>
+
+    <div class="panel" id="authPanel">
+      <h2 style="margin:0 0 12px;font-size:1rem">Регистрация / вход</h2>
+      <div class="field">
+        <label class="lbl" for="fio">ФИО</label>
+        <input id="fio" type="text" placeholder="Иванов Иван Иванович" />
+      </div>
+      <div class="field">
+        <label class="lbl" for="phone">Телефон</label>
+        <input id="phone" type="tel" placeholder="+7 (999) 999-99-99" />
+      </div>
+      <div class="field">
+        <label class="lbl" for="role">Кто вы</label>
+        <select id="role">
+          <option value="candidate">Соискатель / работник</option>
+          <option value="freelancer">Фрилансер / партнёр</option>
+        </select>
+      </div>
+      <label class="check" style="margin-bottom:12px">
+        <input type="checkbox" id="pdn" />
+        <span>Даю согласие на обработку персональных данных и принимаю условия из раздела <a href="info.html#docs">Документы</a></span>
+      </label>
+      <button type="button" class="btn btn-primary" id="registerBtn">Продолжить</button>
+    </div>
+
+    <div class="panel" id="cabinet">
+      <h2 style="margin:0 0 8px;font-size:1rem">Кабинет</h2>
+      <p id="cabHello" class="muted"></p>
+      <div id="cabCandidate">
+        <p><strong>Соискатель</strong></p>
+        <ul>
+          <li>Поиск и отклики — на <a href="index.html">витрине</a></li>
+          <li>Скоро: сохранённые фильтры, подписки, табель, рефералка, опросы</li>
+        </ul>
+      </div>
+      <div id="cabFreelancer" style="display:none">
+        <p><strong>Фрилансер</strong></p>
+        <ul>
+          <li>Персональная ссылка и статистика — скоро</li>
+          <li>Оплата за кандидата по ID объекта — только здесь, не на общей витрине</li>
+        </ul>
+        <p class="muted">Цены за полную вахту / РФ. Иначе уточняйте у менеджера ЦВЗ.</p>
+      </div>
+      <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:8px">Выйти на этом устройстве</button>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    const KEY = "cvz_lk_v1";
+    const toast = document.getElementById("toast");
+    function show(t) { toast.textContent = t; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 1800); }
+    function load() {
+      try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; }
+    }
+    function render() {
+      const u = load();
+      const auth = document.getElementById("authPanel");
+      const cab = document.getElementById("cabinet");
+      if (!u) { auth.style.display = ""; cab.style.display = "none"; return; }
+      auth.style.display = "none"; cab.style.display = "block";
+      document.getElementById("cabHello").textContent = `${u.fio} · ${u.phone}`;
+      document.getElementById("cabCandidate").style.display = u.role === "freelancer" ? "none" : "";
+      document.getElementById("cabFreelancer").style.display = u.role === "freelancer" ? "" : "none";
+    }
+    document.getElementById("registerBtn").onclick = () => {
+      const fio = document.getElementById("fio").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      const role = document.getElementById("role").value;
+      if (!fio || !phone) return show("Укажите ФИО и телефон");
+      if (!document.getElementById("pdn").checked) return show("Нужно согласие на ПДн");
+      localStorage.setItem(KEY, JSON.stringify({ fio, phone, role, pdn: true, at: Date.now() }));
+      show("Профиль сохранён на устройстве");
+      render();
+    };
+    document.getElementById("logoutBtn").onclick = () => { localStorage.removeItem(KEY); render(); show("Вышли"); };
+    render();
+  </script>
+</body>
+</html>

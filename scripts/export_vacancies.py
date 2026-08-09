@@ -149,6 +149,29 @@ def has_travel_compensation(comp_raw):
     return any(k in low for k in keys)
 
 
+def parse_local_ok(raw):
+    """да -> True, нет -> False, empty -> None (пока показываем местным)."""
+    s = norm(raw).lower().replace("ё", "е")
+    if not s:
+        return None
+    if s in ("да", "yes", "y", "1") or s.startswith("да"):
+        return True
+    if s in ("нет", "no", "n", "0") or s.startswith("нет"):
+        return False
+    return None
+
+
+def parse_pay_type(raw):
+    s = norm(raw).lower().replace("ё", "е")
+    if not s:
+        return ""
+    if "сделк" in s:
+        return "сделка"
+    if "фикс" in s:
+        return "фикс"
+    return ""
+
+
 def is_moscow_city(*parts):
     """True if public/internal place text points to Moscow city, not just Московская область."""
     blob = " ".join(norm(p) for p in parts if p).lower().replace("ё", "е")
@@ -436,6 +459,16 @@ def main():
         ot_num = parse_ot(row.get("ОТ"))
         travel_comp = has_travel_compensation(comp)
         duties_raw = norm(row.get("Обязанности"))
+        local_raw = row.get("местные")
+        if local_raw is None:
+            local_raw = row.get("Местные")
+        pay_type_raw = row.get("фикс/сделка")
+        if pay_type_raw is None:
+            pay_type_raw = row.get("Фикс/сделка")
+        if pay_type_raw is None:
+            pay_type_raw = row.get("фикс")
+        local_ok = parse_local_ok(local_raw)
+        pay_type = parse_pay_type(pay_type_raw)
 
         try:
             id_num = int(float(vid)) if isinstance(vid, (int, float)) else str(vid).strip()
@@ -618,6 +651,8 @@ def main():
                 "contract": norm(row.get("Оформление")),
                 "clothes": norm(row.get("Спец одежда")),
                 "compensation": comp,
+                "local": "да" if local_ok is True else ("нет" if local_ok is False else ""),
+                "pay_type": pay_type,
                 "jobs": job_title,
                 "duties": duty if expand else duties_raw,
                 "rate_extra": norm(row.get("Ставка*")),
@@ -666,6 +701,8 @@ def main():
                     "short_shift": ot_num in (15, 21),
                     "travel_comp": travel_comp,
                     "sp": norm(sp),
+                    "local_ok": local_ok,
+                    "pay_type": pay_type,
                     "lat": lat,
                     "lng": lng,
                     "geo_label": geo_label,

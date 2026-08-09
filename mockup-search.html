@@ -173,7 +173,7 @@
     }
 
     select, input, button { font: inherit; color: var(--text); }
-    select, input[type="number"], input[type="text"], input[type="tel"] {
+    select, input[type="number"], input[type="text"], input[type="tel"], input[type="search"] {
       width: 100%;
       background: var(--input-bg);
       border: 1px solid var(--line);
@@ -295,6 +295,11 @@
       gap: 10px;
       margin-bottom: 12px;
     }
+    .keyword-search {
+      flex: 1 1 220px;
+      max-width: 440px;
+      margin-left: auto;
+    }
 
     #mapPanel { display: none; }
     #mapPanel.active { display: block; }
@@ -384,7 +389,15 @@
     .duty { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
     html[data-theme="dark"] .duty { color: #d7e2ec; }
     .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .bottom-bar { margin-top: 14px; display: flex; justify-content: flex-end; }
+    .bottom-bar { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .pay-type {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: lowercase;
+    }
+    .card-pick { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
 
     .toast {
       position: fixed; left: 50%; bottom: 24px;
@@ -433,6 +446,8 @@
         <p>Все актуальные вакансии в одном окне. Выберите параметры — система покажет подходящие варианты.</p>
       </div>
       <div class="topbar-right">
+        <a class="btn btn-ghost btn-sm" href="info.html" style="text-decoration:none">Информация</a>
+        <a class="btn btn-ghost btn-sm" href="account.html" style="text-decoration:none">Кабинет</a>
         <button type="button" class="theme-toggle" id="themeToggle">Светлая тема</button>
       </div>
     </header>
@@ -455,7 +470,7 @@
           <label class="check"><input type="checkbox" id="food" /> Нужно питание</label>
           <label class="check"><input type="checkbox" id="noSb" /> Без СБ</label>
           <label class="check"><input type="checkbox" id="noMed" /> Без медкнижки</label>
-          <label class="check"><input type="checkbox" id="shortShift" /> Короткая вахта (15/21)</label>
+          <label class="check"><input type="checkbox" id="shortShift" /> Короткая вахта</label>
         </div>
 
         <div class="field" style="margin-bottom:6px">
@@ -486,6 +501,9 @@
             <button type="button" class="active" id="viewList" data-view="list">Список</button>
             <button type="button" id="viewMap" data-view="map">Карта</button>
           </div>
+          <div class="keyword-search">
+            <input type="search" id="keywordSearch" placeholder="ID или ключевое слово" autocomplete="off" enterkeyhint="search" />
+          </div>
         </div>
         <div class="cards" id="cards"></div>
         <div id="mapPanel">
@@ -493,6 +511,7 @@
           <p class="map-hint">Можно двигать карту и менять масштаб. Наведите на точку — кратко, нажмите — подробнее. Точки — по городу/посёлку, без точного адреса.</p>
         </div>
         <div class="bottom-bar">
+          <button type="button" class="btn btn-ghost" id="copySelected" disabled>Скопировать выбранные</button>
           <button type="button" class="btn btn-ghost" id="copyAll">Скопировать все</button>
         </div>
       </main>
@@ -550,6 +569,6 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
   <script src="bitrix-config.js"></script>
-  <script src="app.js?v=map5"></script>
+  <script src="app.js?v=vitrine6"></script>
 </body>
 </html>
