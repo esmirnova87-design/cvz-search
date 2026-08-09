@@ -270,23 +270,13 @@ function addPerson(preset = null) {
       <label class="lbl">Возраст</label>
       <input type="number" data-age min="18" max="70" placeholder="—" />
     </div>
-    <div class="row2">
-      <div class="field">
-        <label class="lbl">Формат</label>
-        <select data-stay>
-          <option value="">не важно</option>
-          <option value="local">местная (без проживания)</option>
-          <option value="shift">вахта (с проживанием)</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="lbl">Оплата</label>
-        <select data-pay-mode>
-          <option value="">фикс или сделка</option>
-          <option value="фикс">только фикс</option>
-          <option value="сделка">только сделка</option>
-        </select>
-      </div>
+    <div class="field">
+      <label class="lbl">Оплата</label>
+      <select data-pay-mode>
+        <option value="" selected>все варианты</option>
+        <option value="фикс">фиксированная</option>
+        <option value="сделка">сдельная</option>
+      </select>
     </div>
     <div class="field" style="margin-bottom:6px">
       <label class="lbl">Какие вакансии рассматриваем</label>
@@ -306,7 +296,6 @@ function addPerson(preset = null) {
     if (preset.citizen) box.querySelector("[data-citizen]").value = preset.citizen;
     if (preset.gender) box.querySelector("[data-gender]").value = preset.gender;
     if (preset.age != null && preset.age !== "") box.querySelector("[data-age]").value = preset.age;
-    if (preset.stay) box.querySelector("[data-stay]").value = preset.stay;
     if (preset.payMode) box.querySelector("[data-pay-mode]").value = preset.payMode;
   }
 
@@ -383,16 +372,12 @@ function regionMatches(selectedRegions, vacRegion) {
   return selectedRegions.includes(vacRegion);
 }
 
-function localOkMatches(stay, v) {
-  if (!stay || stay === "shift") return true;
-  if (stay === "local") return v.local_ok !== false;
-  return true;
-}
-
 function payModeMatches(mode, v) {
   if (!mode) return true;
-  const pt = String(v.pay_type || "").toLowerCase();
+  const pt = String(v.pay_type || "").toLowerCase().replace(/ё/g, "е");
   if (!pt) return true;
+  if (mode === "фикс") return pt.includes("фикс");
+  if (mode === "сделка") return pt.includes("сделк");
   return pt === mode;
 }
 
@@ -402,7 +387,6 @@ function personFits(personEl, v) {
   const age = ageRaw === "" ? 0 : Number(ageRaw);
   const citizen = personEl.querySelector("[data-citizen]").value;
   const jobs = checkedValues(personEl.querySelector("[data-jobs]"));
-  const stay = personEl.querySelector("[data-stay]")?.value || "";
   const payMode = personEl.querySelector("[data-pay-mode]")?.value || "";
 
   if (gender === "М" && !v.gender_m) return false;
@@ -410,7 +394,6 @@ function personFits(personEl, v) {
   if (age && (age < v.age_from || age > v.age_to)) return false;
   if (!citizenMatches(citizen, v.citizens || [])) return false;
   if (!jobMatches(jobs, v.jobs || [])) return false;
-  if (!localOkMatches(stay, v)) return false;
   if (!payModeMatches(payMode, v)) return false;
   return true;
 }
