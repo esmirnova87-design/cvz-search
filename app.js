@@ -171,11 +171,33 @@ function jobsForGender(g) {
   return [...map.values()];
 }
 
+function expandGroupToFilterItems(group) {
+  // Slash-groups are synonyms for SEARCH, but FILTER shows each title on its own line.
+  // Parentheses with inner slashes: "водитель (a/b/c)" → separate lines a, b, c (+ base name).
+  if (group.id === "любая") return [{ groupId: group.id, label: group.label }];
+  let s = String(group.label || "");
+  s = s.replace(/\(([^)]*\/[^)]*)\)/g, (_, inner) => `/${inner}`);
+  const parts = s
+    .split("/")
+    .map((p) => p.trim().replace(/^\(+/, "").replace(/\)+$/, "").trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const label of parts) {
+    const key = label.toLowerCase().replace(/ё/g, "е");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ groupId: group.id, label });
+  }
+  return out.length ? out : [{ groupId: group.id, label: group.label }];
+}
+
 function renderJobGroups(container, groups, { checked = [] } = {}) {
-  container.innerHTML = groups.map((g, idx) => {
-    const isChecked = checked.includes(g.id) || checked.includes(g.label);
+  const items = groups.flatMap(expandGroupToFilterItems);
+  container.innerHTML = items.map((item, idx) => {
+    const isChecked = checked.includes(item.groupId);
     const id = `${container.id || "jobs"}_${idx}`;
-    return `<label class="check" data-job-label="${escapeAttr(g.label.toLowerCase())}"><input type="checkbox" id="${id}" value="${escapeAttr(g.id)}" data-aliases="${escapeAttr(g.aliases.join("|"))}" ${isChecked ? "checked" : ""} /> ${escapeHtml(g.label)}</label>`;
+    return `<label class="check" data-job-label="${escapeAttr(item.label.toLowerCase())}"><input type="checkbox" id="${id}" value="${escapeAttr(item.groupId)}" data-aliases="${escapeAttr(item.groupId)}" ${isChecked ? "checked" : ""} /> ${escapeHtml(item.label)}</label>`;
   }).join("");
 }
 
