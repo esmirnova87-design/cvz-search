@@ -459,9 +459,13 @@ def main():
         ot_num = parse_ot(row.get("ОТ"))
         travel_comp = has_travel_compensation(comp)
         duties_raw = norm(row.get("Обязанности"))
-        local_raw = row.get("местные")
+        local_raw = row.get("МП")
+        if local_raw is None:
+            local_raw = row.get("местные")
         if local_raw is None:
             local_raw = row.get("Местные")
+        if local_raw is None:
+            local_raw = row.get("местный персонал")
         pay_type_raw = row.get("фикс/сделка")
         if pay_type_raw is None:
             pay_type_raw = row.get("Фикс/сделка")
