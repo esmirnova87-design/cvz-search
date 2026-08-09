@@ -8,122 +8,183 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet" />
   <style>
-    :root, html[data-theme="dark"] {
-      --red: #f11c23; --bg: linear-gradient(165deg, #072139, #0b2f4d 48%, #051828);
-      --bg-spot-1: rgba(241, 28, 35, 0.18); --text: #fff; --muted: #9db0c2;
-      --line: rgba(255,255,255,.14); --surface: rgba(255,255,255,.06); --input-bg: rgba(5,24,40,.85);
-      --heading: #ffb4b7; --shadow: 0 18px 50px rgba(0,0,0,.35);
-    }
-    html[data-theme="light"] {
-      --bg: linear-gradient(165deg, #f4f7fb, #e8eef5); --bg-spot-1: rgba(241,28,35,.08);
-      --text: #072139; --muted: #5a6f84; --line: rgba(7,33,57,.12); --surface: #fff;
-      --input-bg: #fff; --heading: #072139; --shadow: 0 14px 40px rgba(7,33,57,.1);
+    :root {
+      --red: #f11c23;
+      --navy: #072139;
+      --bg: linear-gradient(165deg, #072139, #0b2f4d 48%, #051828);
+      --bg-spot: rgba(241, 28, 35, 0.16);
+      --text: #fff;
+      --muted: #9db0c2;
+      --line: rgba(255,255,255,.14);
+      --surface: rgba(255,255,255,.06);
+      --surface-2: rgba(255,255,255,.1);
+      --input-bg: rgba(5,24,40,.9);
+      --heading: #ffb4b7;
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+      --font: "Manrope", system-ui, sans-serif;
+      --display: "Unbounded", system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh; font-family: "Manrope", system-ui, sans-serif; color: var(--text);
-      background: radial-gradient(900px 480px at 8% -8%, var(--bg-spot-1), transparent 55%), var(--bg);
+      margin: 0; min-height: 100vh; font-family: var(--font); color: var(--text);
+      background: radial-gradient(900px 480px at 8% -8%, var(--bg-spot), transparent 55%), var(--bg);
     }
-    .wrap { width: min(520px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 60px; transition: width .2s; }
-    .wrap.wide { width: min(980px, calc(100% - 28px)); }
-    h1 { font-family: "Unbounded", system-ui, sans-serif; font-weight: 500; font-size: 1.35rem; margin: 0 0 8px; }
-    h2 { font-size: 1rem; margin: 0 0 12px; }
-    .muted { color: var(--muted); font-size: .92rem; }
-    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; box-shadow: var(--shadow); }
+    .wrap { width: min(560px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 64px; }
+    .wrap.wide { width: min(920px, calc(100% - 28px)); }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .brand {
+      font-family: var(--display); font-weight: 500; font-size: 1.05rem; letter-spacing: .02em;
+    }
+    .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    h1 { font-family: var(--display); font-weight: 500; font-size: 1.45rem; margin: 0 0 6px; }
+    h2 { font-size: 1.02rem; margin: 0 0 12px; font-weight: 700; }
+    .muted { color: var(--muted); font-size: .92rem; line-height: 1.45; }
+    .note {
+      margin: 0 0 14px; font-size: .78rem; color: var(--muted); opacity: .85;
+    }
+    .panel {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+      padding: 18px; margin-top: 14px; box-shadow: var(--shadow);
+    }
     .field { display: grid; gap: 6px; margin-bottom: 12px; }
-    label.lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    label.lbl {
+      font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600;
+    }
     input, select, button, textarea { font: inherit; color: var(--text); }
     input, select, textarea {
-      width: 100%; background: var(--input-bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      width: 100%; background: var(--input-bg); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px 14px;
     }
-    textarea { resize: vertical; min-height: 120px; }
-    .btn { border: none; border-radius: 12px; padding: 12px 14px; font-weight: 700; cursor: pointer; }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: rgba(241,28,35,.55); box-shadow: 0 0 0 3px rgba(241,28,35,.18);
+    }
+    textarea { resize: vertical; min-height: 110px; }
+    .btn {
+      border: none; border-radius: 12px; padding: 11px 14px; font-weight: 700; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-sm { padding: 8px 12px; font-size: .88rem; border-radius: 10px; }
     .btn-primary { background: var(--red); color: #fff; }
+    .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
     .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+    .btn-ghost:hover { background: var(--surface-2); }
     .btn-block { width: 100%; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-    .nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-    .nav a { color: var(--heading); }
-    .check { display: flex; gap: 8px; align-items: flex-start; font-size: .9rem; }
-    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line); padding: 10px 14px; border-radius: 999px; opacity: 0; transition: .25s; z-index: 20; }
-    .toast.show { opacity: 1; }
     .hidden { display: none !important; }
-    .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
     .tab {
       border: 1px solid var(--line); background: transparent; color: var(--text);
-      border-radius: 999px; padding: 8px 12px; cursor: pointer; font-weight: 600; font-size: .88rem;
+      border-radius: 999px; padding: 8px 14px; cursor: pointer; font-weight: 600; font-size: .88rem;
     }
     .tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+    .consent {
+      display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start;
+      margin: 0 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+      background: rgba(0,0,0,.12);
+    }
+    .consent input[type="checkbox"] {
+      width: 22px; height: 22px; margin-top: 2px; accent-color: var(--red); cursor: pointer;
+    }
+    .consent span { font-size: .92rem; line-height: 1.4; }
+    .consent a { color: var(--heading); }
     .ok {
-      background: rgba(46, 160, 90, .15); border: 1px solid rgba(46, 160, 90, .35);
+      background: rgba(46,160,90,.15); border: 1px solid rgba(46,160,90,.35);
       color: #b7f0c8; padding: 10px 12px; border-radius: 10px; font-size: .88rem; margin-top: 10px;
     }
-    html[data-theme="light"] .ok { color: #1d5c32; background: #f0faf3; border-color: #b7e0c2; }
     .warn {
-      background: rgba(241, 28, 35, .12); border: 1px solid rgba(241, 28, 35, .35);
+      background: rgba(241,28,35,.12); border: 1px solid rgba(241,28,35,.35);
       color: #ffb4b7; padding: 10px 12px; border-radius: 10px; font-size: .88rem; margin-top: 10px;
     }
-    html[data-theme="light"] .warn { color: #7a1d1d; background: #fff4f4; border-color: #f5c2c2; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--line); padding: 10px 14px;
+      border-radius: 999px; opacity: 0; transition: .25s; z-index: 40; max-width: 90vw;
+    }
+    .toast.show { opacity: 1; }
+    .deal, .card-mini {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 8px; background: rgba(0,0,0,.1);
+    }
     .pack-wrap { position: relative; }
     .icon-copy {
       position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border-radius: 10px;
       border: 1px solid var(--line); background: var(--input-bg); color: var(--text); cursor: pointer;
-      display: grid; place-items: center; font-size: 1.1rem;
+      display: grid; place-items: center;
     }
-    #chatPack { min-height: 180px; padding-right: 52px; font-family: ui-monospace, monospace; font-size: .82rem; }
-    .deal {
-      border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 8px;
+    #chatPack { min-height: 140px; padding-right: 52px; font-family: ui-monospace, monospace; font-size: .8rem; }
+    .grid-compact { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .grid-compact .field { margin-bottom: 0; }
+    .grid-compact input, .grid-compact textarea { padding: 8px 10px; font-size: .9rem; }
+    .grid-compact textarea { min-height: 52px; }
+    details.more {
+      margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
     }
-    .auth-switch { display: flex; gap: 8px; margin-bottom: 12px; }
+    details.more > summary {
+      cursor: pointer; font-weight: 700; list-style: none; color: var(--heading);
+    }
+    details.more > summary::-webkit-details-marker { display: none; }
   </style>
 </head>
 <body>
   <div class="wrap" id="wrap">
-    <div class="nav">
-      <a href="index.html">← К поиску</a>
-      <a href="info.html">Информация</a>
+    <div class="topbar">
+      <div class="brand">ЦВЗ · кабинет</div>
+      <div class="top-actions">
+        <a class="btn btn-ghost btn-sm" href="index.html">К поиску</a>
+        <a class="btn btn-ghost btn-sm" href="info.html">Информация</a>
+      </div>
     </div>
+
     <h1>Личный кабинет</h1>
-    <p class="muted">Телефон + пароль → контакт в Битрикс. Роли: соискатель / фрилансер / админ.</p>
+    <p class="muted">Вход по телефону и паролю.</p>
+    <p class="note">[заметки: профиль пишется в контакт Bitrix; админ-инструменты — по служебному паролю]</p>
 
     <div class="panel" id="authPanel">
-      <div class="auth-switch">
+      <div class="tabs" style="margin-bottom:14px">
         <button type="button" class="tab active" id="modeLogin">Вход</button>
         <button type="button" class="tab" id="modeReg">Регистрация</button>
       </div>
-      <div class="field" id="fioField">
+
+      <div class="field hidden" id="fioField">
         <label class="lbl" for="fio">ФИО</label>
         <input id="fio" type="text" placeholder="Иванов Иван Иванович" autocomplete="name" />
       </div>
       <div class="field">
         <label class="lbl" for="phone">Телефон</label>
-        <input id="phone" type="tel" placeholder="+7 (999) 999-99-99" autocomplete="tel" />
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (999) 999-99-99" maxlength="18" />
       </div>
       <div class="field">
         <label class="lbl" for="password">Пароль</label>
-        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
+        <input id="password" type="password" placeholder="Не менее 4 символов" autocomplete="current-password" />
       </div>
       <div class="field hidden" id="adminPassField">
-        <label class="lbl" for="adminPass">Пароль админ-инструментов</label>
-        <input id="adminPass" type="password" placeholder="Служебный пароль" />
+        <label class="lbl" for="adminPass">Служебный пароль админа</label>
+        <input id="adminPass" type="password" placeholder="Только для сотрудников ЦВЗ" />
       </div>
-      <label class="check hidden" id="pdnWrap" style="margin-bottom:12px">
-        <input type="checkbox" id="pdn" />
-        <span>Согласие на ПДн (<a href="info.html#docs">Документы</a>)</span>
-      </label>
+
+      <div id="consentBlock" class="hidden">
+        <label class="consent">
+          <input type="checkbox" id="pdn" />
+          <span>Даю согласие на обработку персональных данных (ПД) для регистрации, входа и подбора вакансий.</span>
+        </label>
+        <label class="consent">
+          <input type="checkbox" id="terms" />
+          <span>Принимаю условия сервиса и документы ЦВЗ (<a href="info.html#docs" target="_blank" rel="noopener">открыть</a>).</span>
+        </label>
+      </div>
+
       <button type="button" class="btn btn-primary btn-block" id="authBtn">Войти</button>
-      <p class="muted" id="authHint" style="margin-top:10px">Вход по телефону и паролю из Битрикс.</p>
     </div>
 
     <div class="panel hidden" id="cabinet">
-      <h2>Кабинет</h2>
-      <p id="cabHello" class="muted"></p>
+      <p id="cabHello" class="muted" style="margin:0 0 12px"></p>
       <div class="tabs" id="cabTabs"></div>
       <div id="tabCandidate" class="hidden"></div>
       <div id="tabFreelancer" class="hidden"></div>
       <div id="tabAdmin" class="hidden"></div>
-      <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:12px">Выйти</button>
+      <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:14px">Выйти</button>
     </div>
   </div>
   <div class="toast" id="toast"></div>
@@ -156,31 +217,48 @@
     };
     const EAEU = ["Россия","Беларусь","Армения","Казахстан","Киргизия","Таджикистан","Узбекистан","Молдова","Азербайджан"].join("\n");
     const toast = document.getElementById("toast");
-    function show(t) { toast.textContent = t; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2000); }
+    function show(t) { toast.textContent = t; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2200); }
     function load() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
     function saveSession(u) {
       localStorage.setItem(KEY, JSON.stringify({
-        contactId: u.contactId, fio: u.fio, phone: u.phone, role: u.role, flOk: !!u.flOk, level: u.level || 0, at: Date.now()
+        contactId: u.contactId, fio: u.fio, phone: u.phone, role: u.role,
+        flOk: !!u.flOk, level: u.level || 0, localAdmin: !!u.localAdmin, at: Date.now()
       }));
     }
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+    function isAdminUser(u) { return !!(u && (u.role === "admin" || u.localAdmin)); }
 
     const phoneEl = document.getElementById("phone");
-    phoneEl.addEventListener("input", () => { phoneEl.value = CVZ_BX.formatPhone(phoneEl.value); });
+    phoneEl.addEventListener("keydown", (e) => {
+      const ok = ["Backspace","Delete","Tab","Escape","Enter","ArrowLeft","ArrowRight","Home","End"];
+      if (ok.includes(e.key) || e.ctrlKey || e.metaKey) return;
+      if (!/^\d$/.test(e.key)) e.preventDefault();
+    });
+    phoneEl.addEventListener("paste", (e) => {
+      e.preventDefault();
+      phoneEl.value = CVZ_BX.formatPhone((e.clipboardData || window.clipboardData).getData("text"));
+    });
+    phoneEl.addEventListener("input", () => {
+      phoneEl.value = CVZ_BX.formatPhone(phoneEl.value);
+    });
 
     function setAuthMode(mode) {
       authMode = mode;
       document.getElementById("modeLogin").classList.toggle("active", mode === "login");
       document.getElementById("modeReg").classList.toggle("active", mode === "reg");
       document.getElementById("fioField").classList.toggle("hidden", mode === "login");
-      document.getElementById("pdnWrap").classList.toggle("hidden", mode === "login");
+      document.getElementById("consentBlock").classList.toggle("hidden", mode === "login");
       document.getElementById("authBtn").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
-      document.getElementById("authHint").textContent = mode === "login"
-        ? "Вход по телефону и паролю из Битрикс."
-        : "Создадим/обновим контакт в Битрикс. Роль по умолчанию — соискатель.";
+      document.getElementById("password").autocomplete = mode === "login" ? "current-password" : "new-password";
     }
     document.getElementById("modeLogin").onclick = () => setAuthMode("login");
     document.getElementById("modeReg").onclick = () => setAuthMode("reg");
     setAuthMode("login");
+    if (new URLSearchParams(location.search).get("admin") === "1") {
+      document.getElementById("adminPassField").classList.remove("hidden");
+    }
 
     function expandCitizen(raw) {
       const s = (raw || "").trim().toLowerCase().replace(/ё/g, "е");
@@ -202,9 +280,7 @@
       for (const line of lines) {
         const mm = line.match(/^([A-Za-zА-Яа-яЁё0-9* /\-]{1,40})\s*:\s*(.*)$/);
         if (mm && ALIAS[mm[1].trim().toLowerCase()]) {
-          flush();
-          curKey = mm[1].trim();
-          curVal = [mm[2]];
+          flush(); curKey = mm[1].trim(); curVal = [mm[2]];
         } else if (curKey) curVal.push(line);
       }
       flush();
@@ -259,50 +335,45 @@
     function savePartners(data) { localStorage.setItem(PARTNERS_KEY, JSON.stringify(data)); }
     function uid() { return (Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)).toLowerCase(); }
     function partnerUrl(code) { return `${partnerSearchBase()}?p=${encodeURIComponent(code)}`; }
-    function escapeHtml(s) {
-      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-    }
 
     function renderCandidate(u) {
       const sheet = JSON.parse(localStorage.getItem(TIMESHEET_KEY) || "{}");
       const my = sheet[u.contactId] || [];
       const surveyDone = !!(JSON.parse(localStorage.getItem(SURVEY_KEY) || "{}")[u.contactId]);
       document.getElementById("tabCandidate").innerHTML = `
-        <p><strong>Соискатель</strong> · уровень ${u.level || 0}</p>
-        <p class="muted">Поиск — на <a href="index.html">витрине</a>. Брони при отклике нет.</p>
+        <p class="muted" style="margin-top:0">Уровень ${u.level || 0}. Поиск вакансий — на <a href="index.html" style="color:var(--heading)">витрине</a>.</p>
         <h2>Рефералка</h2>
-        <p class="muted">Приведи друга по ссылке. После его адаптации — крупная выплата; за следующие вахты того же человека — снова (схема 1-я / 2-я≈5000 / далее≈1000).</p>
+        <p class="muted">После адаптации друга — крупная выплата; за следующие его вахты — снова.</p>
         <div class="field">
-          <label class="lbl">Твоя ссылка</label>
+          <label class="lbl">Ваша ссылка</label>
           <div class="row">
             <input id="refLink" readonly value="${escapeHtml(referralLink(u.contactId))}" />
-            <button type="button" class="btn btn-ghost" id="copyRef">⧉</button>
+            <button type="button" class="btn btn-ghost" id="copyRef">Копировать</button>
           </div>
         </div>
-        <h2>Самотабель (MVP)</h2>
+        <h2>Самотабель</h2>
         <div class="row">
           <input id="shiftDate" type="date" style="max-width:180px" />
           <button type="button" class="btn btn-primary" id="addShift">Отметить смену</button>
         </div>
         <div id="shiftList" class="muted" style="margin-top:8px"></div>
-        <h2 style="margin-top:16px">Опрос «кто такой вахтовик»</h2>
-        <p class="muted">100₽ за прохождение → 1000₽ после адаптации на нашей вакансии. ${surveyDone ? "Черновик ответов уже сохранён на устройстве." : "Каркас ниже — ответы пока локально."}</p>
+        <h2 style="margin-top:18px">Опрос</h2>
+        <p class="muted">100₽ → 1000₽ после адаптации. ${surveyDone ? "Ответы уже сохранены на устройстве." : ""}</p>
         <div class="field"><label class="lbl">Питание vs ставка</label>
           <select id="q1"><option value="">—</option><option>с питанием, ставка меньше</option><option>без питания, ставка больше</option></select>
         </div>
         <div class="field"><label class="lbl">Работодатель vs +200₽</label>
           <select id="q2"><option value="">—</option><option>проверенный работодатель</option><option>ставка выше на 200₽</option></select>
         </div>
-        <div class="field"><label class="lbl">Знаете про рефералку?</label>
-          <select id="q3"><option value="">—</option><option>не знал(а) — теперь знаю</option><option>уже знал(а)</option></select>
+        <div class="field"><label class="lbl">Знали про рефералку?</label>
+          <select id="q3"><option value="">—</option><option>не знал(а)</option><option>уже знал(а)</option></select>
         </div>
-        <div class="field"><label class="lbl">Готовы делиться опытом для контента?</label>
+        <div class="field"><label class="lbl">Готовы делиться опытом?</label>
           <select id="q4"><option value="">—</option><option>да</option><option>нет</option></select>
         </div>
         <button type="button" class="btn btn-primary" id="saveSurvey">Сохранить ответы</button>
         <p id="surveyStatus" class="muted"></p>`;
-      const list = document.getElementById("shiftList");
-      list.innerHTML = my.length ? my.map((d) => `• ${d}`).join("<br>") : "Смен пока нет.";
+      document.getElementById("shiftList").innerHTML = my.length ? my.map((d) => `• ${d}`).join("<br>") : "Смен пока нет.";
       document.getElementById("copyRef").onclick = async () => {
         await navigator.clipboard.writeText(document.getElementById("refLink").value);
         show("Ссылка скопирована");
@@ -313,69 +384,61 @@
         const all = JSON.parse(localStorage.getItem(TIMESHEET_KEY) || "{}");
         const arr = all[u.contactId] || [];
         if (!arr.includes(d)) arr.push(d);
-        arr.sort();
-        all[u.contactId] = arr;
+        arr.sort(); all[u.contactId] = arr;
         localStorage.setItem(TIMESHEET_KEY, JSON.stringify(all));
         show("Смена отмечена");
         renderCandidate(u);
       };
       document.getElementById("saveSurvey").onclick = () => {
         const payload = {
-          q1: document.getElementById("q1").value,
-          q2: document.getElementById("q2").value,
-          q3: document.getElementById("q3").value,
-          q4: document.getElementById("q4").value,
-          at: Date.now()
+          q1: q1.value, q2: q2.value, q3: q3.value, q4: q4.value, at: Date.now()
         };
-        if (!payload.q1 || !payload.q2) return show("Ответьте хотя бы на первые вопросы");
+        if (!payload.q1 || !payload.q2) return show("Ответьте на первые вопросы");
         const all = JSON.parse(localStorage.getItem(SURVEY_KEY) || "{}");
         all[u.contactId] = payload;
         localStorage.setItem(SURVEY_KEY, JSON.stringify(all));
-        document.getElementById("surveyStatus").textContent = "Сохранено локально. Выгрузка в Bitrix/таблицу — следующим слоем.";
+        surveyStatus.textContent = "Сохранено на устройстве.";
         show("Опрос сохранён");
       };
     }
 
     async function renderFreelancer(u) {
       const el = document.getElementById("tabFreelancer");
-      if (!(u.flOk || u.role === "freelancer" || u.role === "admin")) {
-        el.innerHTML = `<p class="warn">Фриланс-кабинет откроется после апрува админа ЦВЗ (галочка на контакте).</p>
-          <p class="muted">Ваш CONTACT_ID: <strong>${escapeHtml(u.contactId)}</strong> — его вводят в партнёрскую ссылку.</p>`;
+      if (!(u.flOk || u.role === "freelancer")) {
+        el.innerHTML = `<p class="warn">Кабинет фрилансера откроется после разрешения ЦВЗ.</p>
+          <p class="muted">Ваш ID контакта: <strong>${escapeHtml(u.contactId)}</strong></p>`;
         return;
       }
       const link = `${partnerSearchBase()}?f=${encodeURIComponent(u.contactId)}`;
       el.innerHTML = `
-        <p><strong>Фрилансер</strong> · CONTACT_ID ${escapeHtml(u.contactId)}</p>
+        <p class="muted" style="margin-top:0">ID ${escapeHtml(u.contactId)}. Суммы только здесь.</p>
         <div class="field">
-          <label class="lbl">Ваша ссылка</label>
+          <label class="lbl">Ссылка для кандидатов</label>
           <div class="row">
             <input id="flLink" readonly value="${escapeHtml(link)}" />
-            <button type="button" class="btn btn-ghost" id="copyFl">⧉</button>
+            <button type="button" class="btn btn-ghost" id="copyFl">Копировать</button>
           </div>
         </div>
-        <p class="muted">Суммы — только здесь (поле «Сумма для фрилансера»). Статус кандидата = стадия воронки «От партнеров».</p>
-        <button type="button" class="btn btn-primary" id="loadDeals">Обновить кандидатов</button>
-        <div id="dealList" style="margin-top:10px"><p class="muted">Загрузка…</p></div>`;
+        <button type="button" class="btn btn-primary" id="loadDeals">Обновить список</button>
+        <div id="dealList" style="margin-top:10px"></div>`;
       document.getElementById("copyFl").onclick = async () => {
-        await navigator.clipboard.writeText(link);
-        show("Ссылка скопирована");
+        await navigator.clipboard.writeText(link); show("Скопировано");
       };
       const load = async () => {
         const box = document.getElementById("dealList");
         box.innerHTML = `<p class="muted">Загрузка…</p>`;
         try {
           const deals = await CVZ_BX.listFreelancerDeals(u.contactId);
+          const sumField = (window.CVZ_BITRIX.dealFields || {}).freelancerSum;
           if (!deals.length) {
-            box.innerHTML = `<p class="muted">Пока нет сделок с вашим ID в поле фрилансера. Новые отклики с вашей ссылки попадут сюда.</p>`;
+            box.innerHTML = `<p class="muted">Пока нет кандидатов с вашим ID.</p>`;
             return;
           }
-          const sumField = (window.CVZ_BITRIX.dealFields || {}).freelancerSum;
           box.innerHTML = deals.map((d) => {
             const sum = sumField ? (d[sumField] || "—") : "—";
-            return `<div class="deal"><strong>${escapeHtml(d.TITLE || ("Сделка #" + d.ID))}</strong>
-              <div class="muted">Статус: ${escapeHtml(CVZ_BX.stageName(d.STAGE_ID))}</div>
-              <div>Сумма для фрилансера: <strong>${escapeHtml(String(sum))}</strong></div>
-            </div>`;
+            return `<div class="deal"><strong>${escapeHtml(d.TITLE || ("#" + d.ID))}</strong>
+              <div class="muted">${escapeHtml(CVZ_BX.stageName(d.STAGE_ID))}</div>
+              <div>Сумма: <strong>${escapeHtml(String(sum))}</strong></div></div>`;
           }).join("");
         } catch (e) {
           box.innerHTML = `<p class="warn">${escapeHtml(e.message || String(e))}</p>`;
@@ -385,75 +448,83 @@
       await load();
     }
 
-    function renderAdmin(u) {
+    function renderAdmin() {
       const el = document.getElementById("tabAdmin");
       el.innerHTML = `
-        <p><strong>Админ ЦВЗ</strong></p>
-        <h2>Апрув фрилансера</h2>
-        <div class="field"><label class="lbl">CONTACT_ID</label><input id="flApproveId" placeholder="ID контакта Bitrix" /></div>
-        <div class="row">
-          <button type="button" class="btn btn-primary" id="flApproveBtn">Разрешить фриланс</button>
-          <button type="button" class="btn btn-ghost" id="flRevokeBtn">Снять</button>
+        <div class="tabs" id="adminSubTabs">
+          <button type="button" class="tab active" data-asub="partners">Партнёры</button>
+          <button type="button" class="tab" data-asub="approve">Апрув фрилансера</button>
+          <button type="button" class="tab" data-asub="vacancy">Новая вакансия</button>
         </div>
-        <p id="flApproveStatus" class="muted"></p>
+        <div id="asub-partners"></div>
+        <div id="asub-approve" class="hidden"></div>
+        <div id="asub-vacancy" class="hidden"></div>`;
 
-        <h2 style="margin-top:20px">Новая вакансия в Sheet</h2>
-        <div class="field"><label class="lbl" for="blob">Массив / заявка</label><textarea id="blob"></textarea></div>
-        <div class="row">
-          <button type="button" class="btn btn-primary" id="parseBtn">Разобрать</button>
-          <button type="button" class="btn btn-ghost" id="clearBlobBtn">Очистить</button>
-        </div>
-        <h2 style="margin-top:18px">Поля строки</h2>
-        <div class="grid" id="fields"></div>
-        <div class="row" style="margin-top:12px"><button type="button" class="btn btn-primary" id="formBtn">Сформировать</button></div>
-        <p class="ok">Пакет → ⧉ → чат разработки («внеси в таблицу»).</p>
-        <div class="field" style="margin-top:12px">
-          <label class="lbl" for="chatPack">Пакет в чат</label>
-          <div class="pack-wrap">
-            <textarea id="chatPack" readonly></textarea>
-            <button type="button" class="icon-copy" id="copyPackBtn" title="Копировать">⧉</button>
-          </div>
-        </div>
+      const partnersBox = document.getElementById("asub-partners");
+      const approveBox = document.getElementById("asub-approve");
+      const vacancyBox = document.getElementById("asub-vacancy");
 
-        <h2 style="margin-top:28px">Партнёрские ссылки</h2>
+      function setAdminSub(name) {
+        ["partners", "approve", "vacancy"].forEach((k) => {
+          document.getElementById("asub-" + k).classList.toggle("hidden", k !== name);
+        });
+        el.querySelectorAll("#adminSubTabs .tab").forEach((b) => b.classList.toggle("active", b.dataset.asub === name));
+      }
+      el.querySelectorAll("#adminSubTabs .tab").forEach((b) => {
+        b.onclick = () => setAdminSub(b.dataset.asub);
+      });
+
+      partnersBox.innerHTML = `
+        <h2>Партнёрские ссылки</h2>
         <div class="field"><label class="lbl">Имя</label><input id="pName" /></div>
-        <div class="field"><label class="lbl">ID контакта Bitrix</label><input id="pBitrix" placeholder="01234" /></div>
-        <div class="field"><label class="lbl">MAX</label><input id="pMax" type="url" /></div>
+        <div class="field"><label class="lbl">ID контакта Bitrix</label><input id="pBitrix" placeholder="обязательно" inputmode="numeric" /></div>
+        <div class="field"><label class="lbl">Ссылка MAX</label><input id="pMax" type="url" placeholder="https://max.ru/u/..." /></div>
         <div class="field"><label class="lbl">Комментарий</label><input id="pComment" /></div>
         <div class="row">
           <button type="button" class="btn btn-primary" id="pCreate">Создать ссылку</button>
           <button type="button" class="btn btn-ghost" id="pExport">Скачать JSON</button>
-          <label class="btn btn-ghost" style="display:inline-flex;align-items:center;cursor:pointer">Загрузить JSON
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer">Загрузить JSON
             <input id="pImport" type="file" accept="application/json,.json" class="hidden" />
           </label>
         </div>
         <div id="pList" style="margin-top:12px"></div>`;
 
-      document.getElementById("flApproveBtn").onclick = async () => {
-        const id = document.getElementById("flApproveId").value.trim();
-        if (!id) return show("Укажите CONTACT_ID");
-        try {
-          await CVZ_BX.setFreelancerOk(id, true);
-          document.getElementById("flApproveStatus").textContent = `Фриланс разрешён для ${id}`;
-          show("Готово");
-        } catch (e) {
-          document.getElementById("flApproveStatus").textContent = e.message;
-        }
-      };
-      document.getElementById("flRevokeBtn").onclick = async () => {
-        const id = document.getElementById("flApproveId").value.trim();
-        if (!id) return show("Укажите CONTACT_ID");
-        try {
-          await CVZ_BX.setFreelancerOk(id, false);
-          document.getElementById("flApproveStatus").textContent = `Снято с ${id}`;
-        } catch (e) {
-          document.getElementById("flApproveStatus").textContent = e.message;
-        }
-      };
+      approveBox.innerHTML = `
+        <h2>Разрешить фриланс</h2>
+        <p class="muted">Включите кабинет фрилансера для контакта Bitrix.</p>
+        <div class="field"><label class="lbl">CONTACT_ID</label><input id="flApproveId" inputmode="numeric" /></div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="flApproveBtn">Разрешить</button>
+          <button type="button" class="btn btn-ghost" id="flRevokeBtn">Снять</button>
+        </div>
+        <p id="flApproveStatus" class="muted"></p>`;
+
+      vacancyBox.innerHTML = `
+        <h2>Новая строка в Sheet</h2>
+        <p class="muted">Вставьте заявку → разбор → проверка → «Сформировать» → копировать в чат разработки.</p>
+        <div class="field"><label class="lbl">Массив / заявка</label><textarea id="blob" placeholder="Текст заявки заказчика"></textarea></div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="parseBtn">Разобрать</button>
+          <button type="button" class="btn btn-ghost" id="clearBlobBtn">Очистить</button>
+          <button type="button" class="btn btn-ghost" id="formBtn">Сформировать</button>
+        </div>
+        <details class="more" id="fieldsDetails">
+          <summary>Поля строки (открыть после разбора)</summary>
+          <div class="grid-compact" id="fields" style="margin-top:12px"></div>
+        </details>
+        <div class="field" style="margin-top:12px">
+          <label class="lbl">Пакет в чат</label>
+          <div class="pack-wrap">
+            <textarea id="chatPack" readonly placeholder="Сначала «Сформировать»"></textarea>
+            <button type="button" class="icon-copy" id="copyPackBtn" title="Копировать">⧉</button>
+          </div>
+        </div>
+        <p class="ok">Вкладку «Фриланс» в таблице после записи протягиваете вручную по новому ID.</p>`;
 
       function renderFields(draft) {
         const box = document.getElementById("fields");
         box.innerHTML = "";
+        const filled = Object.keys(draft).length;
         FIELDS.forEach((name) => {
           const wrap = document.createElement("div");
           wrap.className = "field";
@@ -464,44 +535,47 @@
           const input = document.createElement(tall ? "textarea" : "input");
           input.dataset.key = name;
           input.value = draft[name] || "";
-          if (tall) input.style.minHeight = "64px";
           wrap.append(lab, input);
           box.append(wrap);
         });
+        if (filled) document.getElementById("fieldsDetails").open = true;
       }
       function collect() {
         const draft = {};
-        el.querySelectorAll("#fields [data-key]").forEach((node) => {
+        vacancyBox.querySelectorAll("#fields [data-key]").forEach((node) => {
           const v = node.value.trim();
           if (v) draft[node.dataset.key] = v;
         });
         return draft;
       }
       function buildPack(draft) {
-        return ["Внеси в таблицу ПОТРЕБНОСТЬ1 (новая строка).", "После записи пришли новый ID.", "", "```json", JSON.stringify(draft, null, 2), "```"].join("\n");
+        return ["Внеси в таблицу ПОТРЕБНОСТЬ1 (новая строка).", "Пришли новый ID.", "", "```json", JSON.stringify(draft, null, 2), "```"].join("\n");
       }
       function renderPartnerList() {
         const data = loadPartners();
         const list = document.getElementById("pList");
-        if (!data.items.length) { list.innerHTML = `<p class="muted">Партнёров пока нет.</p>`; return; }
+        if (!data.items.length) { list.innerHTML = `<p class="muted">Пока пусто.</p>`; return; }
         list.innerHTML = data.items.slice().reverse().map((p) => `
-          <div class="panel" style="margin-top:10px;padding:12px">
+          <div class="card-mini">
             <strong>${escapeHtml(p.name)}</strong>
-            <div class="muted" style="word-break:break-all">${escapeHtml(partnerUrl(p.code))}</div>
-            <div class="muted">Bitrix ID: ${escapeHtml(p.bitrixId || "—")}</div>
+            <div class="muted" style="word-break:break-all;margin-top:4px">${escapeHtml(partnerUrl(p.code))}</div>
+            <div class="muted">Bitrix: ${escapeHtml(p.bitrixId || "—")}</div>
             <div class="row" style="margin-top:8px">
-              <button type="button" class="btn btn-ghost" data-copy="${escapeHtml(partnerUrl(p.code))}">Копировать</button>
-              <button type="button" class="btn btn-ghost" data-del="${escapeHtml(p.code)}">Удалить</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-copy="${escapeHtml(partnerUrl(p.code))}">Копировать</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-del="${escapeHtml(p.code)}">Удалить</button>
             </div>
           </div>`).join("");
-        list.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copy); show("Скопировано"); });
+        list.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => {
+          await navigator.clipboard.writeText(b.dataset.copy); show("Скопировано");
+        });
         list.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {
-          if (!confirm("Удалить?")) return;
+          if (!confirm("Удалить партнёра?")) return;
           const d = loadPartners();
           d.items = d.items.filter((x) => x.code !== b.dataset.del);
           savePartners(d); renderPartnerList();
         });
       }
+
       renderFields({});
       const local = loadPartners();
       if (!local.items.length) {
@@ -511,34 +585,52 @@
         }).catch(renderPartnerList);
       } else renderPartnerList();
 
+      document.getElementById("flApproveBtn").onclick = async () => {
+        const id = document.getElementById("flApproveId").value.trim();
+        if (!id) return show("Укажите CONTACT_ID");
+        try {
+          await CVZ_BX.setFreelancerOk(id, true);
+          flApproveStatus.textContent = `Фриланс разрешён для ${id}`;
+          show("Готово");
+        } catch (e) { flApproveStatus.textContent = e.message; }
+      };
+      document.getElementById("flRevokeBtn").onclick = async () => {
+        const id = document.getElementById("flApproveId").value.trim();
+        if (!id) return show("Укажите CONTACT_ID");
+        try {
+          await CVZ_BX.setFreelancerOk(id, false);
+          flApproveStatus.textContent = `Снято с ${id}`;
+        } catch (e) { flApproveStatus.textContent = e.message; }
+      };
       document.getElementById("parseBtn").onclick = () => renderFields(parseBlob(document.getElementById("blob").value || ""));
-      document.getElementById("clearBlobBtn").onclick = () => { document.getElementById("blob").value = ""; renderFields({}); document.getElementById("chatPack").value = ""; };
+      document.getElementById("clearBlobBtn").onclick = () => {
+        blob.value = ""; renderFields({}); chatPack.value = ""; fieldsDetails.open = false;
+      };
       document.getElementById("formBtn").onclick = () => {
         const draft = collect();
-        if (!Object.keys(draft).length) return show("Нет полей");
-        document.getElementById("chatPack").value = buildPack(draft);
-        show("Пакет сформирован");
+        if (!Object.keys(draft).length) return show("Сначала разберите заявку");
+        chatPack.value = buildPack(draft);
+        show("Пакет готов");
       };
       document.getElementById("copyPackBtn").onclick = async () => {
-        const t = document.getElementById("chatPack").value;
-        if (!t) return show("Сначала «Сформировать»");
-        await navigator.clipboard.writeText(t); show("Скопировано");
+        if (!chatPack.value) return show("Сначала «Сформировать»");
+        await navigator.clipboard.writeText(chatPack.value); show("Скопировано");
       };
       document.getElementById("pCreate").onclick = () => {
-        const name = document.getElementById("pName").value.trim();
-        const maxUrl = document.getElementById("pMax").value.trim();
-        const bitrixId = document.getElementById("pBitrix").value.trim();
-        const comment = document.getElementById("pComment").value.trim();
+        const name = pName.value.trim();
+        const maxUrl = pMax.value.trim();
+        const bitrixId = pBitrix.value.trim();
+        const comment = pComment.value.trim();
         if (!name || !maxUrl) return show("Нужны имя и MAX");
-        if (!bitrixId) return show("Нужен CONTACT_ID фрилансера");
+        if (!bitrixId) return show("Нужен CONTACT_ID");
         const data = loadPartners();
         const code = uid();
         data.items.push({ code, name, maxUrl, bitrixId, comment, active: true, createdAt: new Date().toISOString() });
         savePartners(data);
-        ["pName","pMax","pBitrix","pComment"].forEach((id) => document.getElementById(id).value = "");
+        pName.value = pMax.value = pBitrix.value = pComment.value = "";
         renderPartnerList();
         navigator.clipboard.writeText(partnerUrl(code)).catch(() => {});
-        show("Партнёр создан");
+        show("Ссылка создана и скопирована");
       };
       document.getElementById("pExport").onclick = () => {
         const a = document.createElement("a");
@@ -551,6 +643,7 @@
         if (!Array.isArray(data.items)) return show("Неверный JSON");
         savePartners(data); renderPartnerList(); show("Загружено");
       };
+      setAdminSub("partners");
     }
 
     async function render() {
@@ -565,33 +658,48 @@
       }
       auth.classList.add("hidden");
       cab.classList.remove("hidden");
-      const roleLabel = u.role === "admin" ? "админ" : (u.flOk || u.role === "freelancer") ? "фрилансер" : "соискатель";
+
+      const admin = isAdminUser(u);
+      const fl = !!(u.flOk || u.role === "freelancer");
+      let roleLabel = "соискатель";
+      if (admin) roleLabel = "админ ЦВЗ";
+      else if (fl) roleLabel = "фрилансер";
       document.getElementById("cabHello").textContent = `${u.fio || "Без имени"} · ${u.phone} · ${roleLabel} · ID ${u.contactId}`;
+
       const tabs = document.getElementById("cabTabs");
       tabs.innerHTML = "";
-      const list = [["Candidate", "Соискатель"]];
-      if (u.flOk || u.role === "freelancer" || u.role === "admin") list.push(["Freelancer", "Фрилансер"]);
-      if (u.role === "admin") list.push(["Admin", "Админ"]);
-      // local admin unlock without Bitrix admin role
-      if (u.localAdmin && u.role !== "admin") list.push(["Admin", "Админ"]);
+      // Админу — только админка (без пустых вкладок соискатель/фрилансер).
+      // Фрилансеру — фриланс + соискатель (один человек может быть обоими).
+      // Соискателю — соискатель.
+      const list = [];
+      if (admin) list.push(["Admin", "Админ"]);
+      else {
+        list.push(["Candidate", "Соискатель"]);
+        if (fl) list.push(["Freelancer", "Фрилансер"]);
+      }
       list.forEach(([key, label]) => {
         const b = document.createElement("button");
         b.type = "button"; b.className = "tab"; b.dataset.tab = key; b.textContent = label;
         b.onclick = () => setTab(key);
         tabs.append(b);
       });
-      renderCandidate(u);
-      await renderFreelancer(u);
-      if (u.role === "admin" || u.localAdmin) renderAdmin(u);
-      const first = (u.role === "admin" || u.localAdmin) ? "Admin" : (u.flOk || u.role === "freelancer") ? "Freelancer" : "Candidate";
-      setTab(first);
-      if (location.hash === "#admin" && (u.role === "admin" || u.localAdmin)) setTab("Admin");
+
+      if (admin) {
+        renderAdmin();
+        setTab("Admin");
+      } else {
+        renderCandidate(u);
+        await renderFreelancer(u);
+        setTab(fl ? "Freelancer" : "Candidate");
+      }
     }
 
     document.getElementById("authBtn").onclick = async () => {
-      const phone = document.getElementById("phone").value.trim();
+      const phone = phoneEl.value.trim();
       const password = document.getElementById("password").value;
       const btn = document.getElementById("authBtn");
+      if (!CVZ_BX.isValidPhone(phone)) return show("Введите полный телефон: +7 (999) 999-99-99");
+      if (!password || password.length < 4) return show("Пароль от 4 символов");
       btn.disabled = true;
       try {
         let meta;
@@ -600,16 +708,16 @@
         } else {
           const fio = document.getElementById("fio").value.trim();
           if (!fio) throw new Error("Укажите ФИО");
-          if (!document.getElementById("pdn").checked) throw new Error("Нужно согласие на ПДн");
+          if (!document.getElementById("pdn").checked) throw new Error("Нужно согласие на обработку ПД");
+          if (!document.getElementById("terms").checked) throw new Error("Нужно принять условия сервиса");
           const ref = new URLSearchParams(location.search).get("ref") || "";
           meta = await CVZ_BX.registerContact({ fio, phone, password, role: "candidate", refId: ref });
         }
-        // optional local admin tools
         let localAdmin = false;
         const ap = document.getElementById("adminPass").value;
         if (ap && ap === (window.CVZ_PARTNERS_PASS || "")) localAdmin = true;
         saveSession({ ...meta, localAdmin });
-        show(authMode === "login" ? "Вход выполнен" : "Регистрация в Битрикс ок");
+        show(authMode === "login" ? "Вход выполнен" : "Регистрация выполнена");
         await render();
       } catch (e) {
         show(e.message || String(e));
@@ -623,11 +731,6 @@
       render();
       show("Вышли");
     };
-
-    // show admin pass field always small hint via long-press? keep hidden unless ?admin=1
-    if (new URLSearchParams(location.search).get("admin") === "1") {
-      document.getElementById("adminPassField").classList.remove("hidden");
-    }
 
     render();
   </script>
