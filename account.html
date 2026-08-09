@@ -72,6 +72,10 @@
       display: grid; place-items: center; font-size: 1.1rem;
     }
     #chatPack { min-height: 180px; padding-right: 52px; font-family: ui-monospace, monospace; font-size: .82rem; }
+    .deal {
+      border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 8px;
+    }
+    .auth-switch { display: flex; gap: 8px; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -81,11 +85,14 @@
       <a href="info.html">Информация</a>
     </div>
     <h1>Личный кабинет</h1>
-    <p class="muted">Одно приложение: соискатель / фрилансер / админ ЦВЗ. Сейчас профиль локально; дальше — Bitrix (телефон + пароль).</p>
+    <p class="muted">Телефон + пароль → контакт в Битрикс. Роли: соискатель / фрилансер / админ.</p>
 
     <div class="panel" id="authPanel">
-      <h2>Вход / регистрация</h2>
-      <div class="field">
+      <div class="auth-switch">
+        <button type="button" class="tab active" id="modeLogin">Вход</button>
+        <button type="button" class="tab" id="modeReg">Регистрация</button>
+      </div>
+      <div class="field" id="fioField">
         <label class="lbl" for="fio">ФИО</label>
         <input id="fio" type="text" placeholder="Иванов Иван Иванович" autocomplete="name" />
       </div>
@@ -95,25 +102,18 @@
       </div>
       <div class="field">
         <label class="lbl" for="password">Пароль</label>
-        <input id="password" type="password" placeholder="Пароль для входа" autocomplete="new-password" />
-      </div>
-      <div class="field">
-        <label class="lbl" for="role">Кто вы</label>
-        <select id="role">
-          <option value="candidate">Соискатель / работник</option>
-          <option value="freelancer">Фрилансер / партнёр</option>
-          <option value="admin">Админ ЦВЗ</option>
-        </select>
+        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" />
       </div>
       <div class="field hidden" id="adminPassField">
         <label class="lbl" for="adminPass">Пароль админ-инструментов</label>
         <input id="adminPass" type="password" placeholder="Служебный пароль" />
       </div>
-      <label class="check" style="margin-bottom:12px">
+      <label class="check hidden" id="pdnWrap" style="margin-bottom:12px">
         <input type="checkbox" id="pdn" />
-        <span>Даю согласие на обработку ПДн и условия из <a href="info.html#docs">Документов</a></span>
+        <span>Согласие на ПДн (<a href="info.html#docs">Документы</a>)</span>
       </label>
-      <button type="button" class="btn btn-primary btn-block" id="registerBtn">Продолжить</button>
+      <button type="button" class="btn btn-primary btn-block" id="authBtn">Войти</button>
+      <p class="muted" id="authHint" style="margin-top:10px">Вход по телефону и паролю из Битрикс.</p>
     </div>
 
     <div class="panel hidden" id="cabinet">
@@ -123,15 +123,19 @@
       <div id="tabCandidate" class="hidden"></div>
       <div id="tabFreelancer" class="hidden"></div>
       <div id="tabAdmin" class="hidden"></div>
-      <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:12px">Выйти на этом устройстве</button>
+      <button type="button" class="btn btn-ghost" id="logoutBtn" style="margin-top:12px">Выйти</button>
     </div>
   </div>
   <div class="toast" id="toast"></div>
 
   <script src="bitrix-config.js"></script>
+  <script src="bitrix-api.js"></script>
   <script>
     const KEY = "cvz_lk_v1";
     const PARTNERS_KEY = "cvz_partners_v1";
+    const TIMESHEET_KEY = "cvz_timesheet_v1";
+    const SURVEY_KEY = "cvz_survey_v1";
+    let authMode = "login";
     const FIELDS = [
       "Заказчик","гр-во","от","до","Регион","Питание","Питание*","Тип","ОТ","СБ","СБ*",
       "СП","М","Ж","Должность","Ставка макс","Ставка*","Объект","Оформление","График вахты",
@@ -151,10 +155,32 @@
       "фикс/сделка":"фикс/сделка","руб":"РУБ"
     };
     const EAEU = ["Россия","Беларусь","Армения","Казахстан","Киргизия","Таджикистан","Узбекистан","Молдова","Азербайджан"].join("\n");
-
     const toast = document.getElementById("toast");
-    function show(t) { toast.textContent = t; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 1800); }
+    function show(t) { toast.textContent = t; toast.classList.add("show"); setTimeout(() => toast.classList.remove("show"), 2000); }
     function load() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
+    function saveSession(u) {
+      localStorage.setItem(KEY, JSON.stringify({
+        contactId: u.contactId, fio: u.fio, phone: u.phone, role: u.role, flOk: !!u.flOk, level: u.level || 0, at: Date.now()
+      }));
+    }
+
+    const phoneEl = document.getElementById("phone");
+    phoneEl.addEventListener("input", () => { phoneEl.value = CVZ_BX.formatPhone(phoneEl.value); });
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      document.getElementById("modeLogin").classList.toggle("active", mode === "login");
+      document.getElementById("modeReg").classList.toggle("active", mode === "reg");
+      document.getElementById("fioField").classList.toggle("hidden", mode === "login");
+      document.getElementById("pdnWrap").classList.toggle("hidden", mode === "login");
+      document.getElementById("authBtn").textContent = mode === "login" ? "Войти" : "Зарегистрироваться";
+      document.getElementById("authHint").textContent = mode === "login"
+        ? "Вход по телефону и паролю из Битрикс."
+        : "Создадим/обновим контакт в Битрикс. Роль по умолчанию — соискатель.";
+    }
+    document.getElementById("modeLogin").onclick = () => setAuthMode("login");
+    document.getElementById("modeReg").onclick = () => setAuthMode("reg");
+    setAuthMode("login");
 
     function expandCitizen(raw) {
       const s = (raw || "").trim().toLowerCase().replace(/ё/g, "е");
@@ -163,7 +189,6 @@
       if (/снг|еаэс|все/.test(s)) return EAEU;
       return raw.trim();
     }
-
     function parseBlob(text) {
       const draft = {};
       const lines = (text || "").replace(/\r/g, "").split("\n");
@@ -205,44 +230,26 @@
       return draft;
     }
 
-    document.getElementById("role").onchange = () => {
-      document.getElementById("adminPassField").classList.toggle("hidden", document.getElementById("role").value !== "admin");
-    };
-
     function setTab(name) {
       ["tabCandidate", "tabFreelancer", "tabAdmin"].forEach((id) => {
         document.getElementById(id).classList.toggle("hidden", id !== "tab" + name);
       });
-      document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+      document.querySelectorAll("#cabTabs .tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       document.getElementById("wrap").classList.toggle("wide", name === "Admin");
     }
 
-    function renderCandidate() {
-      document.getElementById("tabCandidate").innerHTML = `
-        <p><strong>Соискатель</strong></p>
-        <ul>
-          <li>Поиск и отклики — на <a href="index.html">витрине</a></li>
-          <li>Скоро: фильтры/подписки, табель, рефералка, опрос 100→1000₽, уровень</li>
-        </ul>`;
+    function referralLink(contactId) {
+      const u = new URL(location.href);
+      u.pathname = u.pathname.replace(/account\.html$/i, "index.html");
+      u.search = "?ref=" + encodeURIComponent(contactId);
+      u.hash = "";
+      return u.toString();
     }
-
-    function renderFreelancer() {
-      document.getElementById("tabFreelancer").innerHTML = `
-        <p><strong>Фрилансер</strong></p>
-        <ul>
-          <li>Персональная ссылка (ID = CONTACT_ID Bitrix) — скоро здесь же</li>
-          <li>Статусы кандидатов = стадии воронки; сумма из «Сумма для фрилансера»</li>
-          <li>Оплата по ID объекта — только в кабинете</li>
-        </ul>
-        <p class="muted">Ссылки партнёров админ создаёт во вкладке «Админ».</p>`;
-    }
-
-    function searchBase() {
+    function partnerSearchBase() {
       const u = new URL(location.href);
       u.pathname = u.pathname.replace(/account\.html$/i, "index.html");
       if (u.pathname.endsWith("/")) u.pathname += "index.html";
-      u.search = "";
-      u.hash = "";
+      u.search = ""; u.hash = "";
       return u.toString().replace(/index\.html$/, "").replace(/\/?$/, "/");
     }
     function loadPartners() {
@@ -250,68 +257,199 @@
       catch { return { items: [] }; }
     }
     function savePartners(data) { localStorage.setItem(PARTNERS_KEY, JSON.stringify(data)); }
-    function uid() {
-      return (Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)).toLowerCase();
-    }
-    function partnerUrl(code) { return `${searchBase()}?p=${encodeURIComponent(code)}`; }
+    function uid() { return (Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4)).toLowerCase(); }
+    function partnerUrl(code) { return `${partnerSearchBase()}?p=${encodeURIComponent(code)}`; }
     function escapeHtml(s) {
       return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     }
 
-    function renderAdmin() {
+    function renderCandidate(u) {
+      const sheet = JSON.parse(localStorage.getItem(TIMESHEET_KEY) || "{}");
+      const my = sheet[u.contactId] || [];
+      const surveyDone = !!(JSON.parse(localStorage.getItem(SURVEY_KEY) || "{}")[u.contactId]);
+      document.getElementById("tabCandidate").innerHTML = `
+        <p><strong>Соискатель</strong> · уровень ${u.level || 0}</p>
+        <p class="muted">Поиск — на <a href="index.html">витрине</a>. Брони при отклике нет.</p>
+        <h2>Рефералка</h2>
+        <p class="muted">Приведи друга по ссылке. После его адаптации — крупная выплата; за следующие вахты того же человека — снова (схема 1-я / 2-я≈5000 / далее≈1000).</p>
+        <div class="field">
+          <label class="lbl">Твоя ссылка</label>
+          <div class="row">
+            <input id="refLink" readonly value="${escapeHtml(referralLink(u.contactId))}" />
+            <button type="button" class="btn btn-ghost" id="copyRef">⧉</button>
+          </div>
+        </div>
+        <h2>Самотабель (MVP)</h2>
+        <div class="row">
+          <input id="shiftDate" type="date" style="max-width:180px" />
+          <button type="button" class="btn btn-primary" id="addShift">Отметить смену</button>
+        </div>
+        <div id="shiftList" class="muted" style="margin-top:8px"></div>
+        <h2 style="margin-top:16px">Опрос «кто такой вахтовик»</h2>
+        <p class="muted">100₽ за прохождение → 1000₽ после адаптации на нашей вакансии. ${surveyDone ? "Черновик ответов уже сохранён на устройстве." : "Каркас ниже — ответы пока локально."}</p>
+        <div class="field"><label class="lbl">Питание vs ставка</label>
+          <select id="q1"><option value="">—</option><option>с питанием, ставка меньше</option><option>без питания, ставка больше</option></select>
+        </div>
+        <div class="field"><label class="lbl">Работодатель vs +200₽</label>
+          <select id="q2"><option value="">—</option><option>проверенный работодатель</option><option>ставка выше на 200₽</option></select>
+        </div>
+        <div class="field"><label class="lbl">Знаете про рефералку?</label>
+          <select id="q3"><option value="">—</option><option>не знал(а) — теперь знаю</option><option>уже знал(а)</option></select>
+        </div>
+        <div class="field"><label class="lbl">Готовы делиться опытом для контента?</label>
+          <select id="q4"><option value="">—</option><option>да</option><option>нет</option></select>
+        </div>
+        <button type="button" class="btn btn-primary" id="saveSurvey">Сохранить ответы</button>
+        <p id="surveyStatus" class="muted"></p>`;
+      const list = document.getElementById("shiftList");
+      list.innerHTML = my.length ? my.map((d) => `• ${d}`).join("<br>") : "Смен пока нет.";
+      document.getElementById("copyRef").onclick = async () => {
+        await navigator.clipboard.writeText(document.getElementById("refLink").value);
+        show("Ссылка скопирована");
+      };
+      document.getElementById("addShift").onclick = () => {
+        const d = document.getElementById("shiftDate").value;
+        if (!d) return show("Укажите дату");
+        const all = JSON.parse(localStorage.getItem(TIMESHEET_KEY) || "{}");
+        const arr = all[u.contactId] || [];
+        if (!arr.includes(d)) arr.push(d);
+        arr.sort();
+        all[u.contactId] = arr;
+        localStorage.setItem(TIMESHEET_KEY, JSON.stringify(all));
+        show("Смена отмечена");
+        renderCandidate(u);
+      };
+      document.getElementById("saveSurvey").onclick = () => {
+        const payload = {
+          q1: document.getElementById("q1").value,
+          q2: document.getElementById("q2").value,
+          q3: document.getElementById("q3").value,
+          q4: document.getElementById("q4").value,
+          at: Date.now()
+        };
+        if (!payload.q1 || !payload.q2) return show("Ответьте хотя бы на первые вопросы");
+        const all = JSON.parse(localStorage.getItem(SURVEY_KEY) || "{}");
+        all[u.contactId] = payload;
+        localStorage.setItem(SURVEY_KEY, JSON.stringify(all));
+        document.getElementById("surveyStatus").textContent = "Сохранено локально. Выгрузка в Bitrix/таблицу — следующим слоем.";
+        show("Опрос сохранён");
+      };
+    }
+
+    async function renderFreelancer(u) {
+      const el = document.getElementById("tabFreelancer");
+      if (!(u.flOk || u.role === "freelancer" || u.role === "admin")) {
+        el.innerHTML = `<p class="warn">Фриланс-кабинет откроется после апрува админа ЦВЗ (галочка на контакте).</p>
+          <p class="muted">Ваш CONTACT_ID: <strong>${escapeHtml(u.contactId)}</strong> — его вводят в партнёрскую ссылку.</p>`;
+        return;
+      }
+      const link = `${partnerSearchBase()}?f=${encodeURIComponent(u.contactId)}`;
+      el.innerHTML = `
+        <p><strong>Фрилансер</strong> · CONTACT_ID ${escapeHtml(u.contactId)}</p>
+        <div class="field">
+          <label class="lbl">Ваша ссылка</label>
+          <div class="row">
+            <input id="flLink" readonly value="${escapeHtml(link)}" />
+            <button type="button" class="btn btn-ghost" id="copyFl">⧉</button>
+          </div>
+        </div>
+        <p class="muted">Суммы — только здесь (поле «Сумма для фрилансера»). Статус кандидата = стадия воронки «От партнеров».</p>
+        <button type="button" class="btn btn-primary" id="loadDeals">Обновить кандидатов</button>
+        <div id="dealList" style="margin-top:10px"><p class="muted">Загрузка…</p></div>`;
+      document.getElementById("copyFl").onclick = async () => {
+        await navigator.clipboard.writeText(link);
+        show("Ссылка скопирована");
+      };
+      const load = async () => {
+        const box = document.getElementById("dealList");
+        box.innerHTML = `<p class="muted">Загрузка…</p>`;
+        try {
+          const deals = await CVZ_BX.listFreelancerDeals(u.contactId);
+          if (!deals.length) {
+            box.innerHTML = `<p class="muted">Пока нет сделок с вашим ID в поле фрилансера. Новые отклики с вашей ссылки попадут сюда.</p>`;
+            return;
+          }
+          const sumField = (window.CVZ_BITRIX.dealFields || {}).freelancerSum;
+          box.innerHTML = deals.map((d) => {
+            const sum = sumField ? (d[sumField] || "—") : "—";
+            return `<div class="deal"><strong>${escapeHtml(d.TITLE || ("Сделка #" + d.ID))}</strong>
+              <div class="muted">Статус: ${escapeHtml(CVZ_BX.stageName(d.STAGE_ID))}</div>
+              <div>Сумма для фрилансера: <strong>${escapeHtml(String(sum))}</strong></div>
+            </div>`;
+          }).join("");
+        } catch (e) {
+          box.innerHTML = `<p class="warn">${escapeHtml(e.message || String(e))}</p>`;
+        }
+      };
+      document.getElementById("loadDeals").onclick = load;
+      await load();
+    }
+
+    function renderAdmin(u) {
       const el = document.getElementById("tabAdmin");
       el.innerHTML = `
         <p><strong>Админ ЦВЗ</strong></p>
-
-        <h2>Новая вакансия в Sheet</h2>
-        <div class="field">
-          <label class="lbl" for="blob">Массив / заявка заказчика</label>
-          <textarea id="blob" placeholder="Вставь текст заявки или поля «Ключ: значение»"></textarea>
+        <h2>Апрув фрилансера</h2>
+        <div class="field"><label class="lbl">CONTACT_ID</label><input id="flApproveId" placeholder="ID контакта Bitrix" /></div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="flApproveBtn">Разрешить фриланс</button>
+          <button type="button" class="btn btn-ghost" id="flRevokeBtn">Снять</button>
         </div>
+        <p id="flApproveStatus" class="muted"></p>
+
+        <h2 style="margin-top:20px">Новая вакансия в Sheet</h2>
+        <div class="field"><label class="lbl" for="blob">Массив / заявка</label><textarea id="blob"></textarea></div>
         <div class="row">
           <button type="button" class="btn btn-primary" id="parseBtn">Разобрать</button>
           <button type="button" class="btn btn-ghost" id="clearBlobBtn">Очистить</button>
         </div>
         <h2 style="margin-top:18px">Поля строки</h2>
         <div class="grid" id="fields"></div>
-        <div class="row" style="margin-top:12px">
-          <button type="button" class="btn btn-primary" id="formBtn">Сформировать</button>
-        </div>
-        <p class="ok">«Сформировать» → пакет ниже → ⧉ копировать → вставь в чат разработки («внеси в таблицу»).</p>
+        <div class="row" style="margin-top:12px"><button type="button" class="btn btn-primary" id="formBtn">Сформировать</button></div>
+        <p class="ok">Пакет → ⧉ → чат разработки («внеси в таблицу»).</p>
         <div class="field" style="margin-top:12px">
           <label class="lbl" for="chatPack">Пакет в чат</label>
           <div class="pack-wrap">
-            <textarea id="chatPack" readonly placeholder="Нажми «Сформировать»"></textarea>
+            <textarea id="chatPack" readonly></textarea>
             <button type="button" class="icon-copy" id="copyPackBtn" title="Копировать">⧉</button>
           </div>
         </div>
 
         <h2 style="margin-top:28px">Партнёрские ссылки</h2>
-        <div class="field">
-          <label class="lbl" for="pName">Имя / компания</label>
-          <input id="pName" type="text" placeholder="Иван / ООО" />
-        </div>
-        <div class="field">
-          <label class="lbl" for="pBitrix">ID контакта Bitrix (фрилансер)</label>
-          <input id="pBitrix" type="text" placeholder="01234" />
-        </div>
-        <div class="field">
-          <label class="lbl" for="pMax">Ссылка MAX</label>
-          <input id="pMax" type="url" placeholder="https://max.ru/u/..." />
-        </div>
-        <div class="field">
-          <label class="lbl" for="pComment">Комментарий</label>
-          <input id="pComment" type="text" />
-        </div>
+        <div class="field"><label class="lbl">Имя</label><input id="pName" /></div>
+        <div class="field"><label class="lbl">ID контакта Bitrix</label><input id="pBitrix" placeholder="01234" /></div>
+        <div class="field"><label class="lbl">MAX</label><input id="pMax" type="url" /></div>
+        <div class="field"><label class="lbl">Комментарий</label><input id="pComment" /></div>
         <div class="row">
           <button type="button" class="btn btn-primary" id="pCreate">Создать ссылку</button>
-          <button type="button" class="btn btn-ghost" id="pExport">Скачать partners-data.json</button>
-          <label class="btn btn-ghost" style="display:inline-flex;align-items:center;cursor:pointer">
-            Загрузить JSON
+          <button type="button" class="btn btn-ghost" id="pExport">Скачать JSON</button>
+          <label class="btn btn-ghost" style="display:inline-flex;align-items:center;cursor:pointer">Загрузить JSON
             <input id="pImport" type="file" accept="application/json,.json" class="hidden" />
           </label>
         </div>
         <div id="pList" style="margin-top:12px"></div>`;
+
+      document.getElementById("flApproveBtn").onclick = async () => {
+        const id = document.getElementById("flApproveId").value.trim();
+        if (!id) return show("Укажите CONTACT_ID");
+        try {
+          await CVZ_BX.setFreelancerOk(id, true);
+          document.getElementById("flApproveStatus").textContent = `Фриланс разрешён для ${id}`;
+          show("Готово");
+        } catch (e) {
+          document.getElementById("flApproveStatus").textContent = e.message;
+        }
+      };
+      document.getElementById("flRevokeBtn").onclick = async () => {
+        const id = document.getElementById("flApproveId").value.trim();
+        if (!id) return show("Укажите CONTACT_ID");
+        try {
+          await CVZ_BX.setFreelancerOk(id, false);
+          document.getElementById("flApproveStatus").textContent = `Снято с ${id}`;
+        } catch (e) {
+          document.getElementById("flApproveStatus").textContent = e.message;
+        }
+      };
 
       function renderFields(draft) {
         const box = document.getElementById("fields");
@@ -340,54 +478,30 @@
         return draft;
       }
       function buildPack(draft) {
-        return [
-          "Внеси в таблицу ПОТРЕБНОСТЬ1 (новая строка).",
-          "После записи пришли новый ID. Вкладку «Фриланс» протянем сами по ID.",
-          "",
-          "```json",
-          JSON.stringify(draft, null, 2),
-          "```"
-        ].join("\n");
+        return ["Внеси в таблицу ПОТРЕБНОСТЬ1 (новая строка).", "После записи пришли новый ID.", "", "```json", JSON.stringify(draft, null, 2), "```"].join("\n");
       }
       function renderPartnerList() {
         const data = loadPartners();
         const list = document.getElementById("pList");
-        if (!data.items.length) {
-          list.innerHTML = `<p class="muted">Партнёров пока нет.</p>`;
-          return;
-        }
+        if (!data.items.length) { list.innerHTML = `<p class="muted">Партнёров пока нет.</p>`; return; }
         list.innerHTML = data.items.slice().reverse().map((p) => `
           <div class="panel" style="margin-top:10px;padding:12px">
-            <strong>${escapeHtml(p.name)}</strong> ${p.active === false ? "(выкл)" : ""}
-            <div class="muted" style="margin-top:4px;word-break:break-all">${escapeHtml(partnerUrl(p.code))}</div>
-            <div class="muted">Bitrix ID: ${escapeHtml(p.bitrixId || "—")} · MAX: ${escapeHtml(p.maxUrl || "—")}</div>
+            <strong>${escapeHtml(p.name)}</strong>
+            <div class="muted" style="word-break:break-all">${escapeHtml(partnerUrl(p.code))}</div>
+            <div class="muted">Bitrix ID: ${escapeHtml(p.bitrixId || "—")}</div>
             <div class="row" style="margin-top:8px">
               <button type="button" class="btn btn-ghost" data-copy="${escapeHtml(partnerUrl(p.code))}">Копировать</button>
-              <button type="button" class="btn btn-ghost" data-toggle="${escapeHtml(p.code)}">${p.active === false ? "Включить" : "Выкл"}</button>
               <button type="button" class="btn btn-ghost" data-del="${escapeHtml(p.code)}">Удалить</button>
             </div>
           </div>`).join("");
-        list.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => {
-          await navigator.clipboard.writeText(b.dataset.copy);
-          show("Ссылка скопирована");
-        });
-        list.querySelectorAll("[data-toggle]").forEach((b) => b.onclick = () => {
-          const d = loadPartners();
-          const item = d.items.find((x) => x.code === b.dataset.toggle);
-          if (!item) return;
-          item.active = item.active === false;
-          savePartners(d);
-          renderPartnerList();
-        });
+        list.querySelectorAll("[data-copy]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copy); show("Скопировано"); });
         list.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {
-          if (!confirm("Удалить партнёра?")) return;
+          if (!confirm("Удалить?")) return;
           const d = loadPartners();
           d.items = d.items.filter((x) => x.code !== b.dataset.del);
-          savePartners(d);
-          renderPartnerList();
+          savePartners(d); renderPartnerList();
         });
       }
-
       renderFields({});
       const local = loadPartners();
       if (!local.items.length) {
@@ -398,22 +512,17 @@
       } else renderPartnerList();
 
       document.getElementById("parseBtn").onclick = () => renderFields(parseBlob(document.getElementById("blob").value || ""));
-      document.getElementById("clearBlobBtn").onclick = () => {
-        document.getElementById("blob").value = "";
-        renderFields({});
-        document.getElementById("chatPack").value = "";
-      };
+      document.getElementById("clearBlobBtn").onclick = () => { document.getElementById("blob").value = ""; renderFields({}); document.getElementById("chatPack").value = ""; };
       document.getElementById("formBtn").onclick = () => {
         const draft = collect();
-        if (!Object.keys(draft).length) return show("Нет заполненных полей");
+        if (!Object.keys(draft).length) return show("Нет полей");
         document.getElementById("chatPack").value = buildPack(draft);
         show("Пакет сформирован");
       };
       document.getElementById("copyPackBtn").onclick = async () => {
         const t = document.getElementById("chatPack").value;
         if (!t) return show("Сначала «Сформировать»");
-        await navigator.clipboard.writeText(t);
-        show("Скопировано — вставь в чат");
+        await navigator.clipboard.writeText(t); show("Скопировано");
       };
       document.getElementById("pCreate").onclick = () => {
         const name = document.getElementById("pName").value.trim();
@@ -421,41 +530,34 @@
         const bitrixId = document.getElementById("pBitrix").value.trim();
         const comment = document.getElementById("pComment").value.trim();
         if (!name || !maxUrl) return show("Нужны имя и MAX");
+        if (!bitrixId) return show("Нужен CONTACT_ID фрилансера");
         const data = loadPartners();
         const code = uid();
         data.items.push({ code, name, maxUrl, bitrixId, comment, active: true, createdAt: new Date().toISOString() });
         savePartners(data);
-        document.getElementById("pName").value = "";
-        document.getElementById("pMax").value = "";
-        document.getElementById("pBitrix").value = "";
-        document.getElementById("pComment").value = "";
+        ["pName","pMax","pBitrix","pComment"].forEach((id) => document.getElementById(id).value = "");
         renderPartnerList();
         navigator.clipboard.writeText(partnerUrl(code)).catch(() => {});
-        show("Партнёр создан, ссылка скопирована");
+        show("Партнёр создан");
       };
       document.getElementById("pExport").onclick = () => {
-        const blob = new Blob([JSON.stringify(loadPartners(), null, 2)], { type: "application/json" });
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "partners-data.json";
-        a.click();
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(loadPartners(), null, 2)], { type: "application/json" }));
+        a.download = "partners-data.json"; a.click();
       };
       document.getElementById("pImport").onchange = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const file = e.target.files?.[0]; if (!file) return;
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.items)) return show("Неверный JSON");
-        savePartners(data);
-        renderPartnerList();
-        show("Загружено");
+        savePartners(data); renderPartnerList(); show("Загружено");
       };
     }
 
-    function render() {
+    async function render() {
       const u = load();
       const auth = document.getElementById("authPanel");
       const cab = document.getElementById("cabinet");
-      if (!u) {
+      if (!u || !u.contactId) {
         auth.classList.remove("hidden");
         cab.classList.add("hidden");
         document.getElementById("wrap").classList.remove("wide");
@@ -463,55 +565,70 @@
       }
       auth.classList.add("hidden");
       cab.classList.remove("hidden");
-      document.getElementById("cabHello").textContent = `${u.fio} · ${u.phone} · ${u.role}`;
+      const roleLabel = u.role === "admin" ? "админ" : (u.flOk || u.role === "freelancer") ? "фрилансер" : "соискатель";
+      document.getElementById("cabHello").textContent = `${u.fio || "Без имени"} · ${u.phone} · ${roleLabel} · ID ${u.contactId}`;
       const tabs = document.getElementById("cabTabs");
       tabs.innerHTML = "";
-      const list = [];
-      if (u.role === "candidate") list.push(["Candidate", "Соискатель"]);
-      if (u.role === "freelancer") list.push(["Freelancer", "Фрилансер"]);
-      if (u.role === "admin") {
-        list.push(["Admin", "Админ"]);
-        list.push(["Freelancer", "Фрилансер"]);
-        list.push(["Candidate", "Соискатель"]);
-      }
+      const list = [["Candidate", "Соискатель"]];
+      if (u.flOk || u.role === "freelancer" || u.role === "admin") list.push(["Freelancer", "Фрилансер"]);
+      if (u.role === "admin") list.push(["Admin", "Админ"]);
+      // local admin unlock without Bitrix admin role
+      if (u.localAdmin && u.role !== "admin") list.push(["Admin", "Админ"]);
       list.forEach(([key, label]) => {
         const b = document.createElement("button");
-        b.type = "button";
-        b.className = "tab";
-        b.dataset.tab = key;
-        b.textContent = label;
+        b.type = "button"; b.className = "tab"; b.dataset.tab = key; b.textContent = label;
         b.onclick = () => setTab(key);
         tabs.append(b);
       });
-      renderCandidate();
-      renderFreelancer();
-      if (u.role === "admin") renderAdmin();
-      const first = u.role === "admin" ? "Admin" : u.role === "freelancer" ? "Freelancer" : "Candidate";
+      renderCandidate(u);
+      await renderFreelancer(u);
+      if (u.role === "admin" || u.localAdmin) renderAdmin(u);
+      const first = (u.role === "admin" || u.localAdmin) ? "Admin" : (u.flOk || u.role === "freelancer") ? "Freelancer" : "Candidate";
       setTab(first);
-      if (location.hash === "#admin" && u.role === "admin") setTab("Admin");
+      if (location.hash === "#admin" && (u.role === "admin" || u.localAdmin)) setTab("Admin");
     }
 
-    document.getElementById("registerBtn").onclick = () => {
-      const fio = document.getElementById("fio").value.trim();
+    document.getElementById("authBtn").onclick = async () => {
       const phone = document.getElementById("phone").value.trim();
       const password = document.getElementById("password").value;
-      const role = document.getElementById("role").value;
-      if (!fio || !phone) return show("Укажите ФИО и телефон");
-      if (!password || password.length < 4) return show("Пароль от 4 символов");
-      if (!document.getElementById("pdn").checked) return show("Нужно согласие на ПДн");
-      if (role === "admin") {
+      const btn = document.getElementById("authBtn");
+      btn.disabled = true;
+      try {
+        let meta;
+        if (authMode === "login") {
+          meta = await CVZ_BX.loginContact({ phone, password });
+        } else {
+          const fio = document.getElementById("fio").value.trim();
+          if (!fio) throw new Error("Укажите ФИО");
+          if (!document.getElementById("pdn").checked) throw new Error("Нужно согласие на ПДн");
+          const ref = new URLSearchParams(location.search).get("ref") || "";
+          meta = await CVZ_BX.registerContact({ fio, phone, password, role: "candidate", refId: ref });
+        }
+        // optional local admin tools
+        let localAdmin = false;
         const ap = document.getElementById("adminPass").value;
-        if (ap !== (window.CVZ_PARTNERS_PASS || "")) return show("Неверный пароль админа");
+        if (ap && ap === (window.CVZ_PARTNERS_PASS || "")) localAdmin = true;
+        saveSession({ ...meta, localAdmin });
+        show(authMode === "login" ? "Вход выполнен" : "Регистрация в Битрикс ок");
+        await render();
+      } catch (e) {
+        show(e.message || String(e));
+      } finally {
+        btn.disabled = false;
       }
-      localStorage.setItem(KEY, JSON.stringify({ fio, phone, password, role, pdn: true, at: Date.now() }));
-      show("Профиль сохранён на устройстве");
-      render();
     };
+
     document.getElementById("logoutBtn").onclick = () => {
       localStorage.removeItem(KEY);
       render();
       show("Вышли");
     };
+
+    // show admin pass field always small hint via long-press? keep hidden unless ?admin=1
+    if (new URLSearchParams(location.search).get("admin") === "1") {
+      document.getElementById("adminPassField").classList.remove("hidden");
+    }
+
     render();
   </script>
 </body>

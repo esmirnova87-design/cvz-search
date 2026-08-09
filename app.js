@@ -1,9 +1,13 @@
 /* PUBLIC RULE: never show заказчик / адрес проживания / адрес объекта to candidates or partners. */
 
 const MAX_CHAT_DEFAULT = "https://max.ru/u/f9LHodD0cOJBDYiotyrlreRMBF60M4RCvreUWboUCVHdIqZOr7cTrxnzuuU";
-const partnerCode = new URLSearchParams(location.search).get("p") || "";
-const isPartnerLink = Boolean(partnerCode);
+const urlParams = new URLSearchParams(location.search);
+const partnerCode = urlParams.get("p") || "";
+const freelancerIdFromLink = urlParams.get("f") || "";
+const refFromLink = urlParams.get("ref") || "";
+const isPartnerLink = Boolean(partnerCode || freelancerIdFromLink);
 let partnerChatUrl = MAX_CHAT_DEFAULT;
+let partnerBitrixId = freelancerIdFromLink || "";
 let bitrixEnums = null;
 let pendingApplyVacancy = null;
 let pendingApplyVacancyId = null;
@@ -891,53 +895,81 @@ async function sendBitrixDeal() {
   const objectId = vac && vac.object_id != null ? String(vac.object_id) : (vacId.includes("-") ? vacId.split("-")[0] : vacId);
   const title = `Отклик с ЦВЗ сайта: ${fio}, ${age}`;
   const phoneNorm = "+" + phoneDigits(phone);
+  const flId = partnerBitrixId || freelancerIdFromLink || "";
   const comments = [
     objectId ? `ID: ${objectId}` : "ID: не указан",
     vacId && vacId !== objectId ? `Карточка: ${vacId}` : "",
     vac ? `Вакансия: ${vac.title}` : "",
     "Источник: сайт поиска ЦВЗ",
+    flId ? `Фрилансер CONTACT_ID: ${flId}` : "",
+    refFromLink ? `Реферер CONTACT_ID: ${refFromLink}` : "",
     `ФИО: ${fio}`,
     `Телефон: ${phoneNorm}`,
     `Возраст: ${age}`,
   ].filter(Boolean).join("\n");
 
-  const nameParts = fio.split(/\s+/).filter(Boolean);
-  const contactFields = {
-    OPENED: "Y",
-    TYPE_ID: "CLIENT",
-    SOURCE_DESCRIPTION: "Сайт ЦВЗ",
-    PHONE: [{ VALUE: phoneNorm, VALUE_TYPE: "MOBILE" }]
-  };
-  if (cfg.assignedById) contactFields.ASSIGNED_BY_ID = cfg.assignedById;
-  if (nameParts.length === 1) contactFields.NAME = nameParts[0];
-  else if (nameParts.length === 2) {
-    contactFields.LAST_NAME = nameParts[0];
-    contactFields.NAME = nameParts[1];
-  } else {
-    contactFields.LAST_NAME = nameParts[0];
-    contactFields.NAME = nameParts[1];
-    contactFields.SECOND_NAME = nameParts.slice(2).join(" ");
+  // prefer logged-in contact / find by phone / create
+  let contactId = null;
+  try {
+    const session = JSON.parse(localStorage.getItem("cvz_lk_v1") || "null");
+    if (session && session.contactId && session.phone && phoneDigits(session.phone) === phoneDigits(phone)) {
+      contactId = session.contactId;
+    }
+  } catch (_) {}
+  if (!contactId && window.CVZ_BX) {
+    const existing = await CVZ_BX.findContactByPhone(phone);
+    if (existing) contactId = existing.ID;
   }
-
-  const contactRes = await fetch(`${cfg.webhookBase}/crm.contact.add.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fields: contactFields })
-  }).then((r) => r.json());
-  if (contactRes.error) throw new Error(contactRes.error_description || contactRes.error);
-  const contactId = contactRes.result;
+  if (!contactId) {
+    const nameParts = fio.split(/\s+/).filter(Boolean);
+    const contactFields = {
+      OPENED: "Y",
+      TYPE_ID: "CLIENT",
+      SOURCE_DESCRIPTION: "Сайт ЦВЗ",
+      PHONE: [{ VALUE: phoneNorm, VALUE_TYPE: "MOBILE" }]
+    };
+    if (cfg.assignedById) contactFields.ASSIGNED_BY_ID = cfg.assignedById;
+    if (nameParts.length === 1) contactFields.NAME = nameParts[0];
+    else if (nameParts.length === 2) {
+      contactFields.LAST_NAME = nameParts[0];
+      contactFields.NAME = nameParts[1];
+    } else {
+      contactFields.LAST_NAME = nameParts[0];
+      contactFields.NAME = nameParts[1];
+      contactFields.SECOND_NAME = nameParts.slice(2).join(" ");
+    }
+    if (refFromLink && cfg.contactFields && cfg.contactFields.refId) {
+      contactFields[cfg.contactFields.refId] = String(refFromLink);
+    }
+    const contactRes = await fetch(`${cfg.webhookBase}/crm.contact.add.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: contactFields })
+    }).then((r) => r.json());
+    if (contactRes.error) throw new Error(contactRes.error_description || contactRes.error);
+    contactId = contactRes.result;
+  }
   if (!contactId) throw new Error("Не удалось создать контакт");
 
   const fields = cfg.fields || {};
   const dealFields = {
     TITLE: title,
-    CATEGORY_ID: cfg.categoryId,
-    STAGE_ID: cfg.stageId,
     CONTACT_ID: contactId,
     COMMENTS: comments,
     SOURCE_DESCRIPTION: vacId ? `Сайт ЦВЗ, ID вакансии: ${vacId}` : "Сайт ЦВЗ",
     OPENED: "Y"
   };
+  // partner / freelancer link → воронка «От партнеров»
+  if (flId && cfg.freelancerCandidatesCategoryId != null) {
+    dealFields.CATEGORY_ID = cfg.freelancerCandidatesCategoryId;
+    dealFields.STAGE_ID = "C14:UC_Z742B3"; // Направлен на объект
+    if (cfg.dealFields && cfg.dealFields.freelancerContact) {
+      dealFields[cfg.dealFields.freelancerContact] = String(flId);
+    }
+  } else {
+    dealFields.CATEGORY_ID = cfg.categoryId;
+    dealFields.STAGE_ID = cfg.stageId;
+  }
   if (cfg.assignedById) dealFields.ASSIGNED_BY_ID = cfg.assignedById;
   if (fields.fio) dealFields[fields.fio] = fio;
   if (fields.phone) dealFields[fields.phone] = phoneNorm;
@@ -1100,8 +1132,9 @@ document.getElementById("applySend").addEventListener("click", async () => {
 bindPhoneMask();
 
 async function loadPartnerChat() {
-  if (!isPartnerLink) {
-    partnerChatUrl = MAX_CHAT_DEFAULT;
+  if (freelancerIdFromLink) partnerBitrixId = freelancerIdFromLink;
+  if (!partnerCode) {
+    if (!isPartnerLink) partnerChatUrl = MAX_CHAT_DEFAULT;
     return;
   }
   try {
@@ -1110,6 +1143,7 @@ async function loadPartnerChat() {
     const data = await res.json();
     const found = (data.items || []).find((p) => p.code === partnerCode && p.active !== false);
     if (found && found.maxUrl) partnerChatUrl = found.maxUrl;
+    if (found && found.bitrixId) partnerBitrixId = String(found.bitrixId);
   } catch (_) { /* leave default */ }
 }
 
