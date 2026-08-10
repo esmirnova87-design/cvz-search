@@ -38,12 +38,13 @@ jobs:
         run: |
           python scripts/fetch_google_sheet.py
           python scripts/export_vacancies.py --google
+          python scripts/export_potrebnost_index.py
 
       - name: Commit if changed
         run: |
           git config user.name "cvz-sync-bot"
           git config user.email "cvz-sync-bot@users.noreply.github.com"
-          git add vacancies.json data/geo-cache.json || true
+          git add vacancies.json data/geo-cache.json potrebnost-index.json || true
           if git diff --staged --quiet; then
             echo "No vacancy changes"
           else

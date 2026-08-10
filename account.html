@@ -131,6 +131,32 @@
     }
     .site-footer a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
     .site-footer a:hover { color: var(--heading); }
+    .dropzone {
+      border: 1px dashed var(--line); border-radius: 12px; padding: 16px;
+      background: rgba(0,0,0,.12); text-align: center; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .dropzone:hover, .dropzone.drag {
+      border-color: rgba(241,28,35,.55); background: rgba(241,28,35,.08);
+    }
+    .dropzone .hint { color: var(--muted); font-size: .88rem; margin: 0; }
+    .img-preview {
+      margin-top: 10px; display: none; position: relative;
+      border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+      background: rgba(0,0,0,.2);
+    }
+    .img-preview.show { display: block; }
+    .img-preview img { display: block; max-width: 100%; max-height: 280px; margin: 0 auto; }
+    .img-preview .btn-clear-img {
+      position: absolute; top: 8px; right: 8px;
+    }
+    #updNotes {
+      min-height: 120px; background: rgba(0,0,0,.18);
+    }
+    #updNotes.has-issues {
+      border-color: rgba(241,28,35,.55);
+      box-shadow: 0 0 0 3px rgba(241,28,35,.12);
+    }
   </style>
 </head>
 <body>
@@ -203,6 +229,8 @@
 
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
+  <script src="need-update.js?v=1"></script>
+  <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
     const PARTNERS_KEY = "cvz_partners_v1";
@@ -470,17 +498,20 @@
           <button type="button" class="tab active" data-asub="partners">Партнёры</button>
           <button type="button" class="tab" data-asub="approve">Апрув фрилансера</button>
           <button type="button" class="tab" data-asub="vacancy">Новая вакансия</button>
+          <button type="button" class="tab" data-asub="update">Обновить потребность</button>
         </div>
         <div id="asub-partners"></div>
         <div id="asub-approve" class="hidden"></div>
-        <div id="asub-vacancy" class="hidden"></div>`;
+        <div id="asub-vacancy" class="hidden"></div>
+        <div id="asub-update" class="hidden"></div>`;
 
       const partnersBox = document.getElementById("asub-partners");
       const approveBox = document.getElementById("asub-approve");
       const vacancyBox = document.getElementById("asub-vacancy");
+      const updateBox = document.getElementById("asub-update");
 
       function setAdminSub(name) {
-        ["partners", "approve", "vacancy"].forEach((k) => {
+        ["partners", "approve", "vacancy", "update"].forEach((k) => {
           document.getElementById("asub-" + k).classList.toggle("hidden", k !== name);
         });
         el.querySelectorAll("#adminSubTabs .tab").forEach((b) => b.classList.toggle("active", b.dataset.asub === name));
@@ -535,6 +566,236 @@
           </div>
         </div>
         <p class="ok">Вкладку «Фриланс» в таблице после записи протягиваете вручную по новому ID.</p>`;
+
+      // --- Обновить потребность ---
+      const CUSTOMERS_FALLBACK = [
+        "PersonalResourse", "ЯППИ", "НЦЗ", "ХХЕЛПЕР", "GST GSR Фортренд",
+        "ЭкоСтафф", "Альфа-стафф", "Табия", "КНК", "ИП Зарин Колин",
+        "ProClever", "ГК Эксперт", "Астрея", "СЛАВА", "Lime staff",
+        "Lerteco", "МЕГА СТАР", "ВАШИ ЛЮДИ", "МАРВЕЛ", "STH",
+        "АНКОР", "Vahting", "Люди-Дела", "КОНТАКТ ПЛЮС", "BP_Freelance"
+      ];
+      updateBox.innerHTML = `
+        <h2>Обновить потребность</h2>
+        <p class="muted">Выберите заказчика, вставьте заявку → «Обновить». Пишутся М / Ж / СП. Неоднозначности и новые объекты — в блоке ниже.</p>
+        <p class="note">[заметки: сейчас подключен разбор PersonalResourse; скриншот — превью, OCR позже; запись в Sheet — после загрузки ключа SA один раз в браузере]</p>
+        <div class="field">
+          <label class="lbl" for="updCustomer">Заказчик</label>
+          <select id="updCustomer">
+            <option value="">— выберите заказчика —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="updBlob">Заявка (текст)</label>
+          <textarea id="updBlob" placeholder="Вставьте текст заявки, как прислал заказчик." style="min-height:180px"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl">Скриншот (пока только превью)</label>
+          <div class="dropzone" id="updDrop" tabindex="0">
+            <p class="hint">Перетащите картинку, Ctrl+V или выберите файл</p>
+            <input id="updFile" type="file" accept="image/*" class="hidden" />
+          </div>
+          <div class="img-preview" id="updPreview">
+            <img id="updPreviewImg" alt="Превью заявки" />
+            <button type="button" class="btn btn-ghost btn-sm btn-clear-img" id="updClearImg">Убрать</button>
+          </div>
+        </div>
+        <div class="row">
+          <button type="button" class="btn btn-primary" id="updSubmit">Обновить</button>
+          <button type="button" class="btn btn-ghost" id="updClear">Очистить</button>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label class="lbl" for="updNotes">Результат / вопросы / расхождения</label>
+          <textarea id="updNotes" readonly placeholder="После «Обновить» здесь план изменений и вопросы." style="min-height:200px"></textarea>
+        </div>
+        <details class="more">
+          <summary>Запись в Google Sheet (ключ один раз)</summary>
+          <p class="muted" style="margin:8px 0">Файл service account JSON остаётся только в этом браузере (localStorage), в git не попадает. Нужен для github.io (с file:// запись не сработает из‑за CORS).</p>
+          <div class="row">
+            <label class="btn btn-ghost btn-sm" style="cursor:pointer">Загрузить ключ SA
+              <input id="updSaFile" type="file" accept="application/json,.json" class="hidden" />
+            </label>
+            <button type="button" class="btn btn-ghost btn-sm" id="updSaClear">Удалить ключ</button>
+            <span class="muted" id="updSaStatus"></span>
+          </div>
+        </details>`;
+
+      let updImageDataUrl = "";
+      let updIndexRows = [];
+      let updSheetsCfg = null;
+      const updCustomer = document.getElementById("updCustomer");
+      const updBlob = document.getElementById("updBlob");
+      const updDrop = document.getElementById("updDrop");
+      const updFile = document.getElementById("updFile");
+      const updPreview = document.getElementById("updPreview");
+      const updPreviewImg = document.getElementById("updPreviewImg");
+      const updNotes = document.getElementById("updNotes");
+
+      function fillCustomers(list) {
+        const cur = updCustomer.value;
+        updCustomer.innerHTML = `<option value="">— выберите заказчика —</option>`;
+        (list || []).forEach((name) => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          updCustomer.append(opt);
+        });
+        if (cur && list.includes(cur)) updCustomer.value = cur;
+      }
+      fillCustomers(CUSTOMERS_FALLBACK);
+      fetch("customers.json?t=" + Date.now())
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => {
+          const list = Array.isArray(d) ? d : (d.customers || d.items || []);
+          if (list.length) fillCustomers(list.map(String).filter(Boolean));
+        })
+        .catch(() => {});
+
+      fetch("potrebnost-index.json?t=" + Date.now())
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => { updIndexRows = d.rows || []; })
+        .catch(() => { updIndexRows = []; });
+
+      fetch("sheets-config.json?t=" + Date.now())
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => { updSheetsCfg = d; })
+        .catch(() => { updSheetsCfg = null; });
+
+      function refreshSaStatus() {
+        const el = document.getElementById("updSaStatus");
+        if (!el) return;
+        el.textContent = (window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa())
+          ? "ключ загружен"
+          : "ключ не загружен — будет только план без записи";
+      }
+      refreshSaStatus();
+      document.getElementById("updSaFile").onchange = async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try {
+          const obj = JSON.parse(await f.text());
+          if (!obj.private_key || !obj.client_email) throw new Error("Нужен JSON service account");
+          CVZ_SHEETS_WRITE.saveSa(obj);
+          refreshSaStatus();
+          show("Ключ сохранён в браузере");
+        } catch (err) {
+          show(err.message || "Ошибка ключа");
+        }
+        e.target.value = "";
+      };
+      document.getElementById("updSaClear").onclick = () => {
+        CVZ_SHEETS_WRITE.clearSa();
+        refreshSaStatus();
+        show("Ключ удалён");
+      };
+
+      function setUpdImage(dataUrl) {
+        updImageDataUrl = dataUrl || "";
+        if (updImageDataUrl) {
+          updPreviewImg.src = updImageDataUrl;
+          updPreview.classList.add("show");
+        } else {
+          updPreviewImg.removeAttribute("src");
+          updPreview.classList.remove("show");
+        }
+      }
+      function readImageFile(file) {
+        if (!file || !file.type.startsWith("image/")) return show("Нужна картинка");
+        const reader = new FileReader();
+        reader.onload = () => setUpdImage(String(reader.result || ""));
+        reader.readAsDataURL(file);
+      }
+      updDrop.onclick = () => updFile.click();
+      updFile.onchange = () => {
+        const f = updFile.files && updFile.files[0];
+        if (f) readImageFile(f);
+        updFile.value = "";
+      };
+      updDrop.addEventListener("dragover", (e) => { e.preventDefault(); updDrop.classList.add("drag"); });
+      updDrop.addEventListener("dragleave", () => updDrop.classList.remove("drag"));
+      updDrop.addEventListener("drop", (e) => {
+        e.preventDefault();
+        updDrop.classList.remove("drag");
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) readImageFile(f);
+      });
+      function onPasteImage(e) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        for (const it of items) {
+          if (it.type && it.type.startsWith("image/")) {
+            e.preventDefault();
+            const f = it.getAsFile();
+            if (f) readImageFile(f);
+            return;
+          }
+        }
+      }
+      updBlob.addEventListener("paste", onPasteImage);
+      updDrop.addEventListener("paste", onPasteImage);
+      document.getElementById("updClearImg").onclick = () => setUpdImage("");
+      document.getElementById("updClear").onclick = () => {
+        updCustomer.value = "";
+        updBlob.value = "";
+        setUpdImage("");
+        updNotes.value = "";
+        updNotes.classList.remove("has-issues");
+      };
+      document.getElementById("updSubmit").onclick = async () => {
+        const customer = updCustomer.value.trim();
+        const text = updBlob.value.trim();
+        if (!customer) return show("Выберите заказчика");
+        if (!text && !updImageDataUrl) return show("Вставьте текст заявки");
+        if (!text && updImageDataUrl) {
+          updNotes.value = "Скриншот получен, но распознавание текста (OCR) ещё не подключено.\nВставьте текст заявки вручную.";
+          updNotes.classList.add("has-issues");
+          return show("Нужен текст заявки");
+        }
+        if (!updIndexRows.length) {
+          updNotes.value = "Не загрузился potrebnost-index.json — нельзя сопоставить объекты.";
+          updNotes.classList.add("has-issues");
+          return show("Нет индекса таблицы");
+        }
+
+        const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
+        let report = CVZ_NEED.formatNotes(plan);
+        const hasIssues = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.notes && plan.notes.length);
+        updNotes.classList.toggle("has-issues", hasIssues);
+
+        const canWrite = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa() && updSheetsCfg && updSheetsCfg.spreadsheetId;
+        const rowsToWrite = (plan.updates || []).length + (plan.cleared || []).length;
+
+        if (plan.ambiguous && plan.ambiguous.length) {
+          report = "Есть неоднозначные объекты — в таблицу НЕ писала. Разберите вопросы ниже.\n\n" + report;
+          updNotes.value = report;
+          return show("Нужны уточнения");
+        }
+
+        if (!rowsToWrite) {
+          updNotes.value = report || "Нечего обновлять.";
+          return show(plan.missing && plan.missing.length ? "Только новые объекты" : "Нет изменений");
+        }
+
+        if (!canWrite) {
+          report =
+            "План готов. Запись в Sheet не выполнена: загрузите ключ SA в блоке ниже (и откройте сайт через github.io, не file://).\n\n" +
+            report;
+          updNotes.value = report;
+          return show("План готов (без записи)");
+        }
+
+        try {
+          const res = await CVZ_SHEETS_WRITE.applyPlan(plan, updSheetsCfg);
+          report = "Готово. Записано ячеек: " + (res.updated || 0) + ".\n\n" + report;
+          updNotes.value = report;
+          show("Готово");
+        } catch (err) {
+          report = "Ошибка записи: " + (err.message || err) + "\n\n" + report;
+          updNotes.value = report;
+          updNotes.classList.add("has-issues");
+          show("Ошибка записи");
+        }
+      };
 
       function renderFields(draft) {
         const box = document.getElementById("fields");
