@@ -775,20 +775,43 @@
     if (!plan) return "";
     const lines = [];
     const updates = plan.updates || [];
-    const changed = updates.filter(
+    const matchedUpdates = updates.filter((u) => !u.clear);
+    const clearedUpdates = updates.filter((u) => u.clear);
+    const changed = matchedUpdates.filter(
       (u) =>
         !sameNeed(u.from_m, u.m) ||
         !sameNeed(u.from_zh, u.zh) ||
         !sameNeed(u.from_sp, u.sp) ||
         u.update_job
     );
+    const unchanged = matchedUpdates.filter(
+      (u) =>
+        sameNeed(u.from_m, u.m) &&
+        sameNeed(u.from_zh, u.zh) &&
+        sameNeed(u.from_sp, u.sp) &&
+        !u.update_job
+    );
     const ambiguous = plan.ambiguous || [];
     const missing = plan.missing || [];
     const noMaxHits = plan.noMaxHits || [];
     const decideCount = ambiguous.length + noMaxHits.length;
+    const matchedCount = matchedUpdates.length;
+    // сколько строк заявки «съелось» в матч (с учётом склейки нескольких → один ID)
+    const appLines = plan.itemsCount || 0;
+    const mergedAway = Math.max(0, appLines - matchedCount - decideCount - missing.length);
 
-    lines.push("заявка: " + (plan.itemsCount || 0));
+    lines.push("заявка: " + appLines + " строк");
+    lines.push("сопоставлено: " + matchedCount + " объектов в таблице");
     lines.push("обновлено: " + changed.length);
+    if (unchanged.length) lines.push("без изменений: " + unchanged.length + " (цифры уже те же)");
+    if (clearedUpdates.length) lines.push("очищено: " + clearedUpdates.length + " (не было в заявке)");
+    if (mergedAway > 0) {
+      lines.push(
+        "склеено: " +
+          mergedAway +
+          " строк заявки вошли в те же объекты (напр. Бимбо 1Ж+8М → один ID)"
+      );
+    }
     lines.push("решить: " + decideCount);
     for (const a of ambiguous) {
       const ids = (a.candidates || []).map((c) => "ID " + c.id).join(" или ");
