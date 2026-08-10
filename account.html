@@ -202,7 +202,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="bitrix-config.js"></script>
-  <script src="bitrix-api.js"></script>
+  <script src="bitrix-api.js?v=phone2"></script>
   <script>
     const KEY = "cvz_lk_v1";
     const PARTNERS_KEY = "cvz_partners_v1";
@@ -247,6 +247,9 @@
       const ok = ["Backspace","Delete","Tab","Escape","Enter","ArrowLeft","ArrowRight","Home","End"];
       if (ok.includes(e.key) || e.ctrlKey || e.metaKey) return;
       if (!/^\d$/.test(e.key)) e.preventDefault();
+      if (/^\d$/.test(e.key) && CVZ_BX.isValidPhone(phoneEl.value) && phoneEl.selectionStart === phoneEl.selectionEnd) {
+        e.preventDefault();
+      }
     });
     phoneEl.addEventListener("paste", (e) => {
       e.preventDefault();

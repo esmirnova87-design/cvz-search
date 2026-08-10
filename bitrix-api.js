@@ -18,32 +18,41 @@
     return res.result;
   }
 
-  function phoneDigits(value) {
+  /** Национальные 10 цифр без кода страны (маска сама рисует +7). */
+  function nationalDigits(value) {
     let d = String(value || "").replace(/\D/g, "");
-    if (d.length === 11 && d.startsWith("8")) d = "7" + d.slice(1);
-    if (d.length === 10) d = "7" + d;
-    return d;
+    if (!d) return "";
+    // полный номер 11 цифр с 7/8
+    while (d.length > 10 && (d[0] === "7" || d[0] === "8")) d = d.slice(1);
+    if (d.length === 11 && (d[0] === "7" || d[0] === "8")) d = d.slice(1);
+    // наш же '+7 (...)' в поле: ведущая 7 — код страны, не часть номера
+    if ((d[0] === "7" || d[0] === "8") && d.length <= 10) d = d.slice(1);
+    return d.slice(0, 10);
+  }
+
+  function phoneDigits(value) {
+    const n = nationalDigits(value);
+    return n ? "7" + n : "";
   }
 
   function formatPhone(value) {
-    const d = phoneDigits(value);
-    if (!d) return "";
-    let out = "+7";
-    if (d.length > 1) out += " (" + d.slice(1, 4);
-    if (d.length >= 4) out += ")";
-    if (d.length > 4) out += " " + d.slice(4, 7);
-    if (d.length > 7) out += "-" + d.slice(7, 9);
-    if (d.length > 9) out += "-" + d.slice(9, 11);
+    const n = nationalDigits(value);
+    if (!n) return "";
+    let out = "+7 (" + n.slice(0, Math.min(3, n.length));
+    if (n.length >= 3) out += ")";
+    if (n.length > 3) out += " " + n.slice(3, Math.min(6, n.length));
+    if (n.length > 6) out += "-" + n.slice(6, Math.min(8, n.length));
+    if (n.length > 8) out += "-" + n.slice(8, Math.min(10, n.length));
     return out;
   }
 
   function isValidPhone(value) {
-    const d = phoneDigits(value);
-    return d.length === 11 && d.startsWith("7");
+    return nationalDigits(value).length === 10;
   }
 
   function phoneNorm(value) {
-    return "+" + phoneDigits(value);
+    const d = phoneDigits(value);
+    return d ? "+" + d : "";
   }
 
   async function sha256Hex(text) {

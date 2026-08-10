@@ -837,28 +837,33 @@ function openApplyModal(vacancyId) {
   applyModal.classList.add("show");
 }
 
-function phoneDigits(value) {
+function nationalDigits(value) {
   let d = String(value || "").replace(/\D/g, "");
-  if (d.startsWith("8")) d = "7" + d.slice(1);
-  if (d && !d.startsWith("7")) d = "7" + d;
-  return d.slice(0, 11);
+  if (!d) return "";
+  while (d.length > 10 && (d[0] === "7" || d[0] === "8")) d = d.slice(1);
+  if (d.length === 11 && (d[0] === "7" || d[0] === "8")) d = d.slice(1);
+  if ((d[0] === "7" || d[0] === "8") && d.length <= 10) d = d.slice(1);
+  return d.slice(0, 10);
+}
+
+function phoneDigits(value) {
+  const n = nationalDigits(value);
+  return n ? "7" + n : "";
 }
 
 function formatPhone(value) {
-  const d = phoneDigits(value);
-  if (!d) return "";
-  let out = "+7";
-  if (d.length > 1) out += " (" + d.slice(1, 4);
-  if (d.length >= 4) out += ")";
-  if (d.length > 4) out += " " + d.slice(4, 7);
-  if (d.length > 7) out += "-" + d.slice(7, 9);
-  if (d.length > 9) out += "-" + d.slice(9, 11);
+  const n = nationalDigits(value);
+  if (!n) return "";
+  let out = "+7 (" + n.slice(0, Math.min(3, n.length));
+  if (n.length >= 3) out += ")";
+  if (n.length > 3) out += " " + n.slice(3, Math.min(6, n.length));
+  if (n.length > 6) out += "-" + n.slice(6, Math.min(8, n.length));
+  if (n.length > 8) out += "-" + n.slice(8, Math.min(10, n.length));
   return out;
 }
 
 function isValidPhone(value) {
-  const d = phoneDigits(value);
-  return d.length === 11 && d.startsWith("7");
+  return nationalDigits(value).length === 10;
 }
 
 function bindPhoneMask() {
@@ -868,6 +873,10 @@ function bindPhoneMask() {
     const ok = ["Backspace", "Delete", "Tab", "Escape", "Enter", "ArrowLeft", "ArrowRight", "Home", "End"];
     if (ok.includes(e.key) || e.ctrlKey || e.metaKey) return;
     if (!/^\d$/.test(e.key)) e.preventDefault();
+    // уже 10 цифр номера — не даём вводить ещё
+    if (/^\d$/.test(e.key) && nationalDigits(phone.value).length >= 10 && phone.selectionStart === phone.selectionEnd) {
+      e.preventDefault();
+    }
   });
   phone.addEventListener("paste", (e) => {
     e.preventDefault();
