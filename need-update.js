@@ -373,6 +373,149 @@
     return parseYappiLoose(raw);
   }
 
+  /**
+   * НЦЗ: таблица Excel/Google.
+   * Потребность = число, Пол = М|Ж отдельным столбцом (не «16Ж»).
+   * Один объект часто 2+ строки (разный пол/должность) → matchItems потом склеит.
+   * Объединённые ячейки «Объект» — повторяем lastObject.
+   */
+  function parseNcz(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const items = [];
+    let header = null;
+    let lastObject = "";
+    let lastLoc = "";
+
+    function splitCols(line) {
+      if (line.includes("\t")) return line.split("\t").map((c) => c.replace(/\s+/g, " ").trim());
+      // копипаст иногда через 2+ пробела
+      return line.split(/\s{2,}|\s*\|\s*/).map((c) => c.replace(/\s+/g, " ").trim()).filter(Boolean);
+    }
+
+    function genderOf(cell) {
+      const t = String(cell || "").trim();
+      if (/^[мm]$/i.test(t) || /^муж/i.test(t)) return "m";
+      if (/^[жf]$/i.test(t) || /^жен/i.test(t)) return "zh";
+      return "";
+    }
+
+    function needNum(cell) {
+      const m = String(cell || "").replace(/\s/g, "").match(/(\d{1,3})/);
+      return m ? parseInt(m[1], 10) : 0;
+    }
+
+    for (const line of lines) {
+      const cols = splitCols(line);
+      if (!cols.length) continue;
+      const njoin = norm(cols.join(" "));
+      if (!header && /объект/.test(njoin) && /потребност/.test(njoin)) {
+        header = cols.map((c) => norm(c));
+        continue;
+      }
+      if (/^объект$/i.test(cols[0]) && cols.length < 4) continue;
+
+      let object = "";
+      let needCell = "";
+      let loc = "";
+      let genderCell = "";
+      let vacancy = "";
+      let rateCell = "";
+
+      if (header) {
+        const io = colIdx(header, ["объект"]);
+        const ineed = colIdx(header, ["потребност"]);
+        const il = colIdx(header, ["территориал", "локац", "город"]);
+        const ig = colIdx(header, ["пол"]);
+        const iv = colIdx(header, ["должност"]);
+        const ir = colIdx(header, ["ставка"]);
+        object = io >= 0 ? cols[io] || "" : "";
+        needCell = ineed >= 0 ? cols[ineed] || "" : "";
+        loc = il >= 0 ? cols[il] || "" : "";
+        genderCell = ig >= 0 ? cols[ig] || "" : "";
+        vacancy = iv >= 0 ? cols[iv] || "" : "";
+        rateCell = ir >= 0 ? cols[ir] || "" : "";
+      } else {
+        // без шапки: объект | N | … | М/Ж | …
+        let start = 0;
+        if (/^\d+$/.test(cols[0]) && cols.length > 3) start = 1; // номер строки НЦЗ
+        object = cols[start] || "";
+        needCell = cols[start + 1] || "";
+        // пол — короткая ячейка М/Ж
+        const gi = cols.findIndex((c, idx) => idx > start && genderOf(c));
+        if (gi >= 0) {
+          genderCell = cols[gi];
+          if (!needNum(needCell)) {
+            const ni = cols.findIndex((c, idx) => idx > start && needNum(c) && !genderOf(c) && idx < gi + 3);
+            if (ni >= 0) needCell = cols[ni];
+          }
+        }
+        const locHit = cols.find((c) => /область|район|р-н|москва|г\./i.test(c) || (c.length > 4 && /ск$|ово$|ец$/i.test(c)));
+        if (locHit) loc = locHit;
+        const jobHit = cols.find((c) => /упаков|грузчик|сборщик|уборщ|горнич|маркир|комплект|разнораб|мойщик|фасов|корен/i.test(c));
+        if (jobHit) vacancy = jobHit;
+      }
+
+      if (object && !/^-+$/.test(object) && !looksLikeYappiNeed(object) && !genderOf(object)) {
+        lastObject = object;
+      } else if (!object) {
+        object = lastObject;
+      } else {
+        object = lastObject || object;
+      }
+      if (loc) lastLoc = loc;
+      else loc = lastLoc;
+
+      const g = genderOf(genderCell);
+      let n = needNum(needCell);
+      // иногда «16Ж» прямо в потребности
+      if (!n && looksLikeYappiNeed(needCell)) {
+        const c = parseCountBlock(needCell);
+        const need = finalizeSp(c);
+        if (!need.m && !need.zh) continue;
+        const place = loc ? object + ", " + loc : object;
+        items.push({
+          raw: [object, needCell, vacancy, loc].filter(Boolean).join(" | "),
+          place,
+          project: object,
+          vacancy: String(vacancy || "").replace(/\s+/g, " ").trim(),
+          location: loc,
+          ...need,
+          roles: c.roles || [],
+          rateHint: rateCell,
+        });
+        continue;
+      }
+      if (!object || !g || !n) continue;
+      if (/потребност|территориал|гражданств/i.test(object)) continue;
+
+      const counts = { m: 0, zh: 0, sp: 0, hasM: false, hasZh: false, hasSp: false, roles: [] };
+      if (g === "m") {
+        counts.m = n;
+        counts.hasM = true;
+      } else {
+        counts.zh = n;
+        counts.hasZh = true;
+      }
+      if (vacancy) {
+        counts.roles.push({ count: n, title: vacancy, gender: g === "m" ? "m" : "zh" });
+      }
+      const need = finalizeSp(counts);
+      const place = loc ? object + ", " + loc : object;
+      items.push({
+        raw: [object, n + (g === "m" ? "М" : "Ж"), vacancy, loc].filter(Boolean).join(" | "),
+        place,
+        project: object,
+        vacancy: String(vacancy || "").replace(/\s+/g, " ").trim(),
+        location: loc,
+        ...need,
+        roles: counts.roles,
+        rateHint: rateCell,
+      });
+    }
+    return items;
+  }
+
   function numNeed(v) {
     const n = parseInt(String(v || "").trim(), 10);
     return Number.isFinite(n) ? n : 0;
@@ -513,11 +656,12 @@
 
   function aliasMatch(item, pool, customer) {
     const list = NEED_ALIASES[customer] || NEED_ALIASES[norm(customer)] || [];
-    const place = norm(item.place);
+    // place + вакансия: у НЦЗ «маркировщик» только в должности, не в объекте
+    const hay = norm([item.place, item.vacancy, item.project].filter(Boolean).join(" "));
     for (const rule of list) {
       const keys = rule.all || rule.match || [];
       if (!keys.length) continue;
-      if (keys.every((k) => place.includes(norm(k)))) {
+      if (keys.every((k) => hay.includes(norm(k)))) {
         const row = pool.find((r) => String(r.id) === String(rule.id));
         if (row) return row;
       }
@@ -679,7 +823,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -843,6 +987,7 @@
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
+    нцз: parseNcz,
   };
 
   global.CVZ_NEED = {
@@ -850,6 +995,7 @@
     formatNotes,
     parsePersonalResourse,
     parseYappi,
+    parseNcz,
     setAliases,
     norm,
   };
