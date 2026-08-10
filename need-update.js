@@ -921,7 +921,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1290,12 +1290,125 @@
     return items;
   }
 
+  /**
+   * Lime staff (Staff Lime): блоки по объектам + строки «- N мужчин/женщин/грузчиков…»
+   * Один объект с разными ролями → отдельные items (доматч по должности, напр. Балашиха операторы vs грузчики).
+   */
+  function parseLimeStaff(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n");
+    const lines = raw.split("\n").map((l) => l.trimEnd());
+    const items = [];
+    let header = "";
+    let loc = "";
+
+    function headerLoc(h) {
+      const m = String(h || "").match(/\(([^)]+)\)/);
+      return m ? m[1].replace(/^г\.?\s*/i, "").trim() : "";
+    }
+
+    function pushItem(place, vacancy, counts) {
+      if (!counts.hasM && !counts.hasZh && !counts.hasSp) return;
+      const need = finalizeSp(counts);
+      items.push({
+        raw: place + " | " + vacancy + " | " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place,
+        project: place,
+        vacancy: vacancy || "",
+        location: loc,
+        ...need,
+        roles: counts.roles || [],
+      });
+    }
+
+    function parseBullet(line) {
+      let t = line.replace(/^[-–—•*]\s*/, "").trim();
+      if (!t || /^🔺/.test(t)) return null;
+      t = t
+        .replace(/мужчин[аы]?|мужик\w*/gi, "М")
+        .replace(/женщин[аы]?|девушек\w*/gi, "Ж");
+      // «20 грузчиков» / «11 упаковщиц» / «10 М с опытом оператора»
+      const roleM = t.match(/(\d+)\s*(грузчик\w*|оператор\w*|водитель\w*|штабелер\w*|комплектовщик\w*)/i);
+      const roleZh = t.match(/(\d+)\s*(упаковщиц\w*|маркировщиц\w*|уборщиц\w*)/i);
+      if (roleM && !/\d+\s*[МЖ]/.test(t.replace(roleM[0], " "))) {
+        const title = roleM[2];
+        const n = parseInt(roleM[1], 10);
+        const g = /упаковщиц|маркировщиц|уборщиц/i.test(title) ? "zh" : "m";
+        return {
+          vacancy: title,
+          counts: {
+            m: g === "m" ? n : 0,
+            zh: g === "zh" ? n : 0,
+            sp: 0,
+            hasM: g === "m",
+            hasZh: g === "zh",
+            hasSp: false,
+            roles: [{ count: n, title, gender: g }],
+          },
+        };
+      }
+      if (roleZh) {
+        const title = roleZh[2];
+        const n = parseInt(roleZh[1], 10);
+        return {
+          vacancy: title,
+          counts: {
+            m: 0,
+            zh: n,
+            sp: 0,
+            hasM: false,
+            hasZh: true,
+            hasSp: false,
+            roles: [{ count: n, title, gender: "zh" }],
+          },
+        };
+      }
+      const c = parseCountBlock(t);
+      if (!c.hasM && !c.hasZh && !c.hasSp) return null;
+      let vacancy = "";
+      if (/оператор/i.test(t)) vacancy = "оператор линии";
+      else if (/штабелер|водитель/i.test(t)) vacancy = "водитель штабелера";
+      else if (/грузчик/i.test(t)) vacancy = "грузчик";
+      else if (/упаков/i.test(t)) vacancy = "упаковщица";
+      return { vacancy, counts: c };
+    }
+
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/staff\s*lime|lime\s*staff|доброе\s+утро|потребность\s+по|остальные\s+заявки\s+на\s+стопе/i.test(line)) {
+        continue;
+      }
+      if (/^🔺/.test(line)) continue;
+
+      // заголовок объекта (не буллет)
+      if (!/^[-–—•*]/.test(line) && !/^\d+\s/.test(line) && line.length > 8) {
+        if (/производств|склад|марс|биг|агро|косметич|завод/i.test(line) || /\([^)]+\)/.test(line)) {
+          header = line.replace(/\s+/g, " ").trim();
+          loc = headerLoc(header);
+          continue;
+        }
+      }
+
+      if (!header) continue;
+      if (!/^[-–—•*]/.test(line) && !/^\d+\s+(муж|жен|груз|упак|операт)/i.test(line)) continue;
+
+      const parsed = parseBullet(line);
+      if (!parsed) continue;
+      const place = loc ? header + ", " + loc : header;
+      // для операторов Балашихи — vacancy явный
+      pushItem(place, parsed.vacancy, parsed.counts);
+    }
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
     нцз: parseNcz,
     экостафф: parseEcoStaff,
     proclever: parseProClever,
+    "lime staff": parseLimeStaff,
+    limestaff: parseLimeStaff,
   };
 
   global.CVZ_NEED = {
@@ -1306,6 +1419,7 @@
     parseNcz,
     parseEcoStaff,
     parseProClever,
+    parseLimeStaff,
     setAliases,
     norm,
   };
