@@ -66,6 +66,7 @@ def main() -> None:
                 "sp": sp,
                 "job": s(cell(r, "Должность")),
                 "rate": s(cell(r, "Ставка макс")),
+                "max": s(cell(r, "МАКС")),
                 "sheetRow": r_i,
             }
         )

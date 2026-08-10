@@ -267,16 +267,27 @@
     return null;
   }
 
+  function hasMax(row) {
+    return !!(row && String(row.max || "").trim());
+  }
+
   function matchItems(items, rows, customer) {
-    const pool = rows.filter((r) => norm(r.customer) === norm(customer));
+    const poolAll = rows.filter((r) => norm(r.customer) === norm(customer));
+    const pool = poolAll.filter(hasMax);
+    const poolNoMax = poolAll.filter((r) => !hasMax(r));
     const used = new Set();
     const matched = [];
     const ambiguous = [];
     const missing = [];
+    const noMaxHits = [];
 
     for (const it of items) {
-      const forced = aliasMatch(it, pool, customer);
+      const forced = aliasMatch(it, poolAll, customer);
       if (forced) {
+        if (!hasMax(forced)) {
+          noMaxHits.push({ item: it, row: forced });
+          continue;
+        }
         if (used.has(forced.id)) {
           ambiguous.push({
             item: it,
@@ -298,7 +309,16 @@
       const top = ranked[0];
       const second = ranked[1];
       if (!top) {
-        missing.push(it);
+        // может быть только строка без МАКС
+        const rankedEmpty = poolNoMax
+          .map((r) => ({ r, s: scoreMatch(it.place, r) }))
+          .filter((x) => x.s >= 4)
+          .sort((a, b) => b.s - a.s);
+        if (rankedEmpty[0]) {
+          noMaxHits.push({ item: it, row: rankedEmpty[0].r });
+        } else {
+          missing.push(it);
+        }
         continue;
       }
       if (second && top.s - second.s < 1.5 && second.s >= 4) {
@@ -319,7 +339,7 @@
       used.add(top.r.id);
       matched.push({ item: it, row: top.r, score: top.s });
     }
-    return { matched, ambiguous, missing, pool, used };
+    return { matched, ambiguous, missing, noMaxHits, pool, poolAll, used };
   }
 
   function jobLines(job) {
@@ -406,7 +426,7 @@
       };
     }
 
-    const { matched, ambiguous, missing, pool, used } = matchItems(items, indexRows, customer);
+    const { matched, ambiguous, missing, noMaxHits, pool, used } = matchItems(items, indexRows, customer);
     const updates = [];
 
     for (const { item, row } of matched) {
@@ -429,7 +449,7 @@
       });
     }
 
-    // Нет в заявке = людей не нужно = очищаем М/Ж/СП автоматически
+    // Нет в заявке = людей не нужно = очищаем М/Ж/СП (только строки с заполненным МАКС)
     for (const r of pool) {
       if (used.has(r.id)) continue;
       if (!(r.m || r.zh || r.sp)) continue;
@@ -459,6 +479,7 @@
       updates,
       ambiguous,
       missing,
+      noMaxHits: noMaxHits || [],
       cleared: [],
       clearedSuggested: [],
       notes: [],
@@ -489,13 +510,28 @@
     );
     const ambiguous = plan.ambiguous || [];
     const missing = plan.missing || [];
+    const noMaxHits = plan.noMaxHits || [];
+    const decideCount = ambiguous.length + noMaxHits.length;
 
     lines.push("заявка: " + (plan.itemsCount || 0));
     lines.push("обновлено: " + changed.length);
-    lines.push("решить: " + ambiguous.length);
+    lines.push("решить: " + decideCount);
     for (const a of ambiguous) {
       const ids = (a.candidates || []).map((c) => "ID " + c.id).join(" или ");
       lines.push("• " + oneLine(a.item.place) + " — " + fmtNeed(a.item) + " → " + (ids || "?") + (a.note ? " (" + a.note + ")" : ""));
+    }
+    for (const n of noMaxHits) {
+      lines.push(
+        "• " +
+          oneLine(n.item.place) +
+          " — " +
+          fmtNeed(n.item) +
+          " → ID " +
+          n.row.id +
+          " " +
+          shortObj(n.row.object) +
+          " (МАКС пусто — не размещена в канале, не обновляю)"
+      );
     }
     lines.push("новые: " + missing.length);
     for (const m of missing) {

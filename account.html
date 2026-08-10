@@ -229,7 +229,7 @@
 
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=4"></script>
+  <script src="need-update.js?v=5"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -809,7 +809,7 @@
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
         let report = CVZ_NEED.formatNotes(plan);
-        const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length);
+        const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.noMaxHits && plan.noMaxHits.length);
         updNotes.classList.toggle("has-issues", hasQuestions);
 
         const hasSa = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa();
