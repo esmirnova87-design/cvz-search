@@ -251,9 +251,10 @@
       "оформление":"Оформление","график":"График вахты","график вахты":"График вахты",
       "обязанности":"Обязанности","спец одежда":"Спец одежда","со":"Спец одежда",
       "мед книжка":"Мед книжка","лмк":"Мед книжка","проживание":"Проживание","заселение":"Заселение",
-      "доставка":"Доставка","компенсации":"Компенсации","доп инфа":"доп инфа","для макс":"для МАКС",
-      "адрес проживания":"Адрес проживания","адрес объекта":"Адрес объекта","мп":"МП",
-      "фикс/сделка":"фикс/сделка","руб":"РУБ"
+      "доставка":"Доставка","транспорт":"Доставка","компенсации":"Компенсации","доп инфа":"доп инфа","для макс":"для МАКС",
+      "адрес проживания":"Адрес проживания","адрес объекта":"Адрес объекта","точный адрес":"Адрес объекта","мп":"МП",
+      "фикс/сделка":"фикс/сделка","руб":"РУБ","служба безопасности":"СБ","сб":"СБ",
+      "медкнижка":"Мед книжка","семейные комнаты":"СП"
     };
     const EAEU = ["Россия","Беларусь","Армения","Казахстан","Киргизия","Таджикистан","Узбекистан","Молдова","Азербайджан"].join("\n");
     const toast = document.getElementById("toast");
@@ -312,36 +313,161 @@
     }
     function parseBlob(text) {
       const draft = {};
-      const lines = (text || "").replace(/\r/g, "").split("\n");
+      const raw = String(text || "").replace(/\r/g, "");
+      const lines = raw.split("\n");
       let curKey = null, curVal = [];
       const flush = () => {
         if (!curKey) return;
         const col = ALIAS[curKey.toLowerCase()];
-        if (col) draft[col] = curVal.join("\n").trim();
+        if (col) {
+          const v = curVal.join("\n").trim();
+          if (v) draft[col] = draft[col] ? draft[col] + "\n" + v : v;
+        }
         curKey = null; curVal = [];
       };
       for (const line of lines) {
-        const mm = line.match(/^([A-Za-zА-Яа-яЁё0-9* /\-]{1,40})\s*:\s*(.*)$/);
-        if (mm && ALIAS[mm[1].trim().toLowerCase()]) {
-          flush(); curKey = mm[1].trim(); curVal = [mm[2]];
-        } else if (curKey) curVal.push(line);
+        const cleaned = line.replace(/^[\s✔️🏠🔐💵✅🛁🍜🚍🌡💰💉👔💪👥🇷🇺⏰💸🍛🥖🍞\-•]+/u, "").trim();
+        const mm = cleaned.match(/^([A-Za-zА-Яа-яЁё0-9* /\-]{1,40})\s*:\s*(.*)$/);
+        if (mm) {
+          const key = mm[1].trim().toLowerCase();
+          if (ALIAS[key]) {
+            flush();
+            curKey = mm[1].trim();
+            curVal = [mm[2]];
+            continue;
+          }
+        }
+        if (curKey) curVal.push(line);
       }
       flush();
-      const loc = text.match(/📍\s*(.+)/);
+
+      // Первые строки: Заказчик / Объект (формат PersonalResourse и похожие)
+      const headLines = lines.map((l) => l.trim()).filter(Boolean);
+      if (headLines[0] && !draft["Заказчик"] && headLines[0].length < 60 && !/вакан|услов|требован/i.test(headLines[0])) {
+        draft["Заказчик"] = headLines[0];
+      }
+      if (headLines[1] && !draft["Объект"] && headLines[1].length < 120) {
+        draft["Объект"] = headLines[1].replace(/[🥖🍞]/g, "").trim();
+      }
+
+      const loc = raw.match(/📍\s*(.+)/);
       if (loc) {
         if (!draft["Объект"]) draft["Объект"] = loc[1].trim();
-        if (!draft["для МАКС"]) draft["для МАКС"] = "📍" + loc[1].trim();
       }
-      const dem = text.match(/(?:✅|потребн\w*|нужн\w*)\s*(\d+)\s*([мжМЖ])\b(?:\s*[+/и&\-]?\s*(\d+)\s*([мжМЖ]))?/i);
+
+      // Заголовок вида «КАЛУГА, ХЛЕБОКОМБИНАТ»
+      const title = raw.match(/^([А-ЯЁA-Z][А-ЯЁA-Zа-яёa-z \-]{2,40},\s*[А-ЯЁA-Zа-яёa-z \-]{3,60})/m);
+      if (title) {
+        if (!draft["Объект"]) draft["Объект"] = title[1].trim();
+        const city = title[1].split(",")[0].trim();
+        if (!draft["Регион"] && city) draft["Регион"] = city;
+      }
+
+      // Должности из блока ВАКАНСИИ / Виды работ
+      if (!draft["Должность"]) {
+        const jobs = [];
+        const jobBlock = raw.match(/(?:ВАКАНСИИ|Виды работ и обязанности)\s*:?\s*([\s\S]*?)(?=\n\s*(?:УСЛОВИЯ|ТРЕБОВАНИЯ|Условия|Требования|Рабочие смены|Дополнительно)\b|$)/i);
+        const block = jobBlock ? jobBlock[1] : raw;
+        for (const m of block.matchAll(/^\s*([А-ЯЁA-Zа-яёa-z][А-ЯЁа-яёa-z \-]{2,40})\s*[–—\-]\s+/gm)) {
+          const name = m[1].trim();
+          if (!/^(условия|требования|график|зарплата)/i.test(name)) jobs.push(name.toLowerCase());
+        }
+        if (!jobs.length) {
+          for (const m of block.matchAll(/^\s*([А-ЯЁA-Zа-яёa-z][А-ЯЁа-яёa-z \-]{2,40})\s*-\s+/gm)) {
+            const name = m[1].trim();
+            if (!/^(условия|требования)/i.test(name)) jobs.push(name.toLowerCase());
+          }
+        }
+        if (jobs.length) draft["Должность"] = [...new Set(jobs)].join("\n");
+      }
+
+      // Возраст
+      const age = raw.match(/от\s*(\d{2})\s*до\s*(\d{2})\s*лет/i);
+      if (age) {
+        draft["от"] = age[1];
+        draft["до"] = age[2];
+      }
+
+      // Гражданство
+      if (/граждане\s*рф|только\s*рф|\bрф\b/i.test(raw) && !draft["гр-во"]) draft["гр-во"] = "Россия";
+      if (draft["гр-во"]) draft["гр-во"] = expandCitizen(draft["гр-во"]);
+
+      // График
+      const graph = raw.match(/график\s*работы\s*(\d\s*\/\s*\d)[^\n]*?(\d+)\s*час/i) || raw.match(/(\d\s*\/\s*\d)\s*по\s*(\d+)\s*час/i);
+      if (graph && !draft["График вахты"]) {
+        draft["График вахты"] = graph[1].replace(/\s+/g, "") + " по " + graph[2] + " часов";
+      }
+
+      // Ставка: ищем смену 4000 / час
+      const rateShift = raw.match(/(\d{3,5})\s*₽?\s*\/?\s*смена/i) || raw.match(/(\d{3,5})\s*руб\.?\s*\/?\s*смена/i);
+      if (rateShift && !draft["Ставка макс"]) draft["Ставка макс"] = rateShift[1];
+      const rateNote = raw.match(/Ставка:\s*([^\n]+)/i);
+      if (rateNote) draft["Ставка*"] = rateNote[1].trim();
+
+      // Адреса
+      const addr = raw.match(/(?:Точный адрес|Адрес проживания|Адрес объекта)\s*:\s*([^\n]+)/i);
+      if (addr) {
+        if (!draft["Адрес объекта"]) draft["Адрес объекта"] = addr[1].trim();
+        if (!draft["Адрес проживания"]) draft["Адрес проживания"] = addr[1].trim();
+      }
+      const addrHome = raw.match(/Адрес проживания\s*:\s*([^\n]+)/i);
+      if (addrHome) draft["Адрес проживания"] = addrHome[1].trim();
+
+      // СБ
+      if (/служба безопасности\s*:\s*есть/i.test(raw) || /🔐\s*служба безопасности\s*:\s*есть/i.test(raw)) {
+        if (!draft["СБ"]) draft["СБ"] = "есть";
+      }
+
+      // СП / семейные
+      if (/семейные комнаты\s*:\s*есть/i.test(raw) && !draft["СП"]) draft["СП"] = "да";
+
+      // Питание
+      const food = raw.match(/питание\s*:\s*([^\n]+)/i) || raw.match(/обед\s+бесплатно/i);
+      if (food && !draft["Питание"]) draft["Питание"] = food[1] ? food[1].trim() : "обед";
+
+      // Проживание
+      const live = raw.match(/проживание\s*:\s*([^\n]+)/i);
+      if (live && !draft["Проживание"]) draft["Проживание"] = live[1].trim();
+      else if (/проживание бесплатно/i.test(raw) && !draft["Проживание"]) draft["Проживание"] = "бесплатно";
+
+      // Медкнижка
+      const med = raw.match(/мед\.?\s*книжка[^\n]*/i) || raw.match(/лмк\s*(\d+)/i);
+      if (med && !draft["Мед книжка"]) draft["Мед книжка"] = med[0].replace(/^[-•\s]+/, "").trim();
+
+      // Доставка
+      const tr = raw.match(/транспорт\s*:\s*([^\n]+)/i);
+      if (tr && !draft["Доставка"]) draft["Доставка"] = tr[1].trim();
+
+      // Спецодежда
+      if (/спецодежд\w* выдаем бесплатно/i.test(raw) && !draft["Спец одежда"]) {
+        draft["Спец одежда"] = "Спецодежду выдаем бесплатно";
+      }
+
+      // Тип
+      if (!draft["Тип"] && /хлеб|пищ|кондитер|мяс|фабрик|производ/i.test(raw)) draft["Тип"] = "пищ";
+
+      // М/Ж из явных цифр или доли
+      const dem = raw.match(/(?:✅|потребн\w*|нужн\w*)\s*(\d+)\s*([мжМЖ])\b(?:\s*[+/и&\-]?\s*(\d+)\s*([мжМЖ]))?/i);
       if (dem) {
         draft[dem[2].toUpperCase()] = dem[1];
         if (dem[3]) draft[dem[4].toUpperCase()] = dem[3];
       }
-      const job = text.match(/✅[^\n]*?\d+\s*[мжМЖ]\s+([^\n🔥]+)/i);
-      if (job && !draft["Должность"]) draft["Должность"] = job[1].trim().replace(/[\/\s]+$/, "");
-      const rate = text.match(/(?:🔥|ставк\w*[:\s]*)\s*(\d{3,5})/i);
+      const ratio = raw.match(/гендер\s*:\s*мужчин\w*.*?женщин\w*.*?\((\d+)\s*%\s*\/\s*(\d+)\s*%\)/i);
+      if (ratio && !draft["М"] && !draft["Ж"]) {
+        // только пометка в доп инфу — абсолютных цифр нет
+        draft["доп инфа"] = (draft["доп инфа"] ? draft["доп инфа"] + "\n" : "") + "Гендер М/Ж " + ratio[1] + "%/" + ratio[2] + "%";
+        if (!draft["СП"]) draft["СП"] = "да";
+      }
+
+      // для МАКС — почти весь пост без служебных «Детали» если длинный; иначе весь текст
+      if (!draft["для МАКС"]) {
+        const cut = raw.search(/\nДетали\s*:/i);
+        draft["для МАКС"] = (cut > 40 ? raw.slice(0, cut) : raw).trim();
+      }
+
+      const rate = raw.match(/(?:🔥|ставк\w*[:\s]*)\s*(\d{3,5})/i);
       if (rate && !draft["Ставка макс"]) draft["Ставка макс"] = rate[1];
-      if (draft["гр-во"]) draft["гр-во"] = expandCitizen(draft["гр-во"]);
+
       if (!draft["от"]) draft["от"] = "18";
       if (!draft["ОТ"]) draft["ОТ"] = "30";
       if (!draft["График вахты"]) draft["График вахты"] = "6/1, 7/0 от 30 смен";
@@ -564,6 +690,9 @@
             <textarea id="chatPack" readonly placeholder="Сначала «Сформировать»"></textarea>
             <button type="button" class="icon-copy" id="copyPackBtn" title="Копировать">⧉</button>
           </div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button type="button" class="btn btn-primary" id="copyPackBtnBottom">Скопировать</button>
         </div>
         <p class="ok">Вкладку «Фриланс» в таблице после записи протягиваете вручную по новому ID.</p>`;
 
@@ -941,6 +1070,7 @@
         if (!chatPack.value) return show("Сначала «Сформировать»");
         await navigator.clipboard.writeText(chatPack.value); show("Скопировано");
       };
+      document.getElementById("copyPackBtnBottom").onclick = () => document.getElementById("copyPackBtn").onclick();
       document.getElementById("pCreate").onclick = () => {
         const name = pName.value.trim();
         const maxUrl = pMax.value.trim();
