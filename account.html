@@ -601,6 +601,7 @@
             <button type="button" class="btn btn-ghost btn-sm btn-clear-img" id="updClearImg">Убрать</button>
           </div>
         </div>
+        <p class="muted" id="updIndexStatus" style="margin:0 0 10px">Индекс таблицы: загружается…</p>
         <div class="row">
           <button type="button" class="btn btn-primary" id="updSubmit">Обновить</button>
           <button type="button" class="btn btn-ghost" id="updClear">Очистить</button>
@@ -664,10 +665,34 @@
         })
         .catch(() => {});
 
-      fetch("potrebnost-index.json?t=" + Date.now())
-        .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((d) => { updIndexRows = d.rows || []; })
-        .catch(() => { updIndexRows = []; });
+      const updIndexStatus = document.getElementById("updIndexStatus");
+      function setIndexStatus(msg, ok) {
+        if (!updIndexStatus) return;
+        updIndexStatus.textContent = msg;
+        updIndexStatus.style.color = ok === false ? "#ffb4b7" : "";
+      }
+      async function loadPotrebnostIndex() {
+        if (location.protocol === "file:") {
+          setIndexStatus("Откройте сайт через github.io — с file:// индекс не загрузится.", false);
+          updIndexRows = [];
+          return false;
+        }
+        setIndexStatus("Индекс таблицы: загружается…");
+        try {
+          const r = await fetch("potrebnost-index.json?t=" + Date.now());
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = await r.json();
+          updIndexRows = d.rows || [];
+          if (!updIndexRows.length) throw new Error("пустой файл");
+          setIndexStatus("Индекс таблицы: " + updIndexRows.length + " строк — готово", true);
+          return true;
+        } catch (err) {
+          updIndexRows = [];
+          setIndexStatus("Индекс не загрузился (" + (err.message || err) + "). Обновите страницу.", false);
+          return false;
+        }
+      }
+      loadPotrebnostIndex();
 
       fetch("sheets-config.json?t=" + Date.now())
         .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -767,9 +792,14 @@
           return show("Нужен текст заявки");
         }
         if (!updIndexRows.length) {
-          updNotes.value = "Не загрузился potrebnost-index.json — нельзя сопоставить объекты.";
-          updNotes.classList.add("has-issues");
-          return show("Нет индекса таблицы");
+          const ok = await loadPotrebnostIndex();
+          if (!ok || !updIndexRows.length) {
+            updNotes.value = location.protocol === "file:"
+              ? "Индекс не загружается с file://.\nОткройте:\nhttps://esmirnova87-design.github.io/cvz-search/account.html?admin=1"
+              : "Не загрузился potrebnost-index.json — нельзя сопоставить объекты.\nОбновите страницу (Ctrl+F5) и подождите строку «Индекс таблицы: … готово».";
+            updNotes.classList.add("has-issues");
+            return show("Нет индекса таблицы");
+          }
         }
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
