@@ -140,15 +140,24 @@
       border-color: rgba(241,28,35,.55); background: rgba(241,28,35,.08);
     }
     .dropzone .hint { color: var(--muted); font-size: .88rem; margin: 0; }
-    .img-preview {
-      margin-top: 10px; display: none; position: relative;
-      border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-      background: rgba(0,0,0,.2);
+    .img-gallery {
+      margin-top: 10px; display: none; flex-direction: column; gap: 8px;
     }
-    .img-preview.show { display: block; }
-    .img-preview img { display: block; max-width: 100%; max-height: 280px; margin: 0 auto; }
-    .img-preview .btn-clear-img {
-      position: absolute; top: 8px; right: 8px;
+    .img-gallery.show { display: flex; }
+    .img-gallery-meta {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: .88rem; color: var(--muted);
+    }
+    .img-gallery-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px;
+    }
+    .img-thumb {
+      position: relative; border: 1px solid var(--line); border-radius: 10px;
+      overflow: hidden; background: rgba(0,0,0,.2);
+    }
+    .img-thumb img { display: block; width: 100%; height: 120px; object-fit: cover; }
+    .img-thumb .btn-clear-img {
+      position: absolute; top: 6px; right: 6px;
     }
     #updNotes {
       min-height: 120px; background: rgba(0,0,0,.18);
@@ -227,9 +236,11 @@
   </div>
   <div class="toast" id="toast"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=5"></script>
+  <script src="need-update.js?v=8"></script>
+  <script src="need-ocr.js?v=1"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -488,7 +499,7 @@
       updateBox.innerHTML = `
         <h2>Обновить потребность</h2>
         <p class="muted">Выберите заказчика, вставьте заявку → «Обновить». Пишутся М / Ж / СП. Неоднозначности и новые объекты — в блоке ниже.</p>
-        <p class="note">[заметки: сейчас подключен разбор PersonalResourse; скриншот — превью, OCR позже; запись в Sheet — после загрузки ключа SA один раз в браузере]</p>
+        <p class="note">[заметки: PersonalResourse и ЯППИ; можно кидать несколько скринов — OCR сам достанет текст; запись в Sheet — после ключа SA]</p>
         <div class="field">
           <label class="lbl" for="updCustomerSearch">Заказчик</label>
           <input id="updCustomerSearch" type="search" placeholder="Начните вводить название…" autocomplete="off" />
@@ -501,14 +512,17 @@
           <textarea id="updBlob" placeholder="Вставьте текст заявки, как прислал заказчик." style="min-height:180px"></textarea>
         </div>
         <div class="field">
-          <label class="lbl">Скриншот (пока только превью)</label>
+          <label class="lbl">Скриншоты (можно несколько)</label>
           <div class="dropzone" id="updDrop" tabindex="0">
-            <p class="hint">Перетащите картинку, Ctrl+V или выберите файл</p>
-            <input id="updFile" type="file" accept="image/*" class="hidden" />
+            <p class="hint">Перетащите картинки, Ctrl+V несколько раз или выберите файлы — по «Обновить» распознаем текст</p>
+            <input id="updFile" type="file" accept="image/*" class="hidden" multiple />
           </div>
-          <div class="img-preview" id="updPreview">
-            <img id="updPreviewImg" alt="Превью заявки" />
-            <button type="button" class="btn btn-ghost btn-sm btn-clear-img" id="updClearImg">Убрать</button>
+          <div class="img-gallery" id="updPreview">
+            <div class="img-gallery-meta">
+              <span id="updImgCount">0 фото</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="updClearImg">Убрать все</button>
+            </div>
+            <div class="img-gallery-grid" id="updPreviewGrid"></div>
           </div>
         </div>
         <p class="muted" id="updIndexStatus" style="margin:0 0 10px">Индекс таблицы: загружается…</p>
@@ -532,7 +546,7 @@
           </div>
         </details>`;
 
-      let updImageDataUrl = "";
+      let updImageDataUrls = [];
       let updIndexRows = [];
       let updSheetsCfg = null;
       let updCustomerList = CUSTOMERS_FALLBACK.slice();
@@ -542,7 +556,8 @@
       const updDrop = document.getElementById("updDrop");
       const updFile = document.getElementById("updFile");
       const updPreview = document.getElementById("updPreview");
-      const updPreviewImg = document.getElementById("updPreviewImg");
+      const updPreviewGrid = document.getElementById("updPreviewGrid");
+      const updImgCount = document.getElementById("updImgCount");
       const updNotes = document.getElementById("updNotes");
 
       function fillCustomers(list, filterText) {
@@ -642,26 +657,56 @@
         show("Ключ удалён");
       };
 
-      function setUpdImage(dataUrl) {
-        updImageDataUrl = dataUrl || "";
-        if (updImageDataUrl) {
-          updPreviewImg.src = updImageDataUrl;
-          updPreview.classList.add("show");
-        } else {
-          updPreviewImg.removeAttribute("src");
-          updPreview.classList.remove("show");
-        }
+      function renderUpdImages() {
+        updPreviewGrid.innerHTML = "";
+        updImgCount.textContent = updImageDataUrls.length
+          ? updImageDataUrls.length + " фото"
+          : "0 фото";
+        updPreview.classList.toggle("show", updImageDataUrls.length > 0);
+        updImageDataUrls.forEach((url, idx) => {
+          const wrap = document.createElement("div");
+          wrap.className = "img-thumb";
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = "Скрин " + (idx + 1);
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn btn-ghost btn-sm btn-clear-img";
+          btn.textContent = "×";
+          btn.title = "Убрать";
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            updImageDataUrls.splice(idx, 1);
+            renderUpdImages();
+          };
+          wrap.appendChild(img);
+          wrap.appendChild(btn);
+          updPreviewGrid.appendChild(wrap);
+        });
+      }
+      function addUpdImage(dataUrl) {
+        if (!dataUrl) return;
+        updImageDataUrls.push(dataUrl);
+        renderUpdImages();
+      }
+      function clearUpdImages() {
+        updImageDataUrls = [];
+        renderUpdImages();
       }
       function readImageFile(file) {
-        if (!file || !file.type.startsWith("image/")) return show("Нужна картинка");
+        if (!file || !file.type.startsWith("image/")) return;
         const reader = new FileReader();
-        reader.onload = () => setUpdImage(String(reader.result || ""));
+        reader.onload = () => addUpdImage(String(reader.result || ""));
         reader.readAsDataURL(file);
+      }
+      function readImageFiles(fileList) {
+        const files = Array.from(fileList || []).filter((f) => f && f.type && f.type.startsWith("image/"));
+        if (!files.length) return show("Нужна картинка");
+        files.forEach(readImageFile);
       }
       updDrop.onclick = () => updFile.click();
       updFile.onchange = () => {
-        const f = updFile.files && updFile.files[0];
-        if (f) readImageFile(f);
+        if (updFile.files && updFile.files.length) readImageFiles(updFile.files);
         updFile.value = "";
       };
       updDrop.addEventListener("dragover", (e) => { e.preventDefault(); updDrop.classList.add("drag"); });
@@ -669,43 +714,81 @@
       updDrop.addEventListener("drop", (e) => {
         e.preventDefault();
         updDrop.classList.remove("drag");
-        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        if (f) readImageFile(f);
+        if (e.dataTransfer && e.dataTransfer.files) readImageFiles(e.dataTransfer.files);
       });
       function onPasteImage(e) {
         const items = e.clipboardData && e.clipboardData.items;
         if (!items) return;
+        let got = false;
         for (const it of items) {
           if (it.type && it.type.startsWith("image/")) {
-            e.preventDefault();
             const f = it.getAsFile();
-            if (f) readImageFile(f);
-            return;
+            if (f) {
+              got = true;
+              readImageFile(f);
+            }
           }
         }
+        if (got) e.preventDefault();
       }
       updBlob.addEventListener("paste", onPasteImage);
       updDrop.addEventListener("paste", onPasteImage);
-      document.getElementById("updClearImg").onclick = () => setUpdImage("");
+      document.getElementById("updClearImg").onclick = () => clearUpdImages();
       document.getElementById("updClear").onclick = () => {
         updCustomer.value = "";
         updCustomerSearch.value = "";
         fillCustomers(updCustomerList, "");
         updBlob.value = "";
-        setUpdImage("");
+        clearUpdImages();
         updNotes.value = "";
         updNotes.classList.remove("has-issues");
       };
       document.getElementById("updSubmit").onclick = async () => {
         const customer = updCustomer.value.trim();
-        const text = updBlob.value.trim();
+        let text = updBlob.value.trim();
+        const btn = document.getElementById("updSubmit");
         if (!customer) return show("Выберите заказчика");
-        if (!text && !updImageDataUrl) return show("Вставьте текст заявки");
-        if (!text && updImageDataUrl) {
-          updNotes.value = "Скриншот получен, но распознавание текста (OCR) ещё не подключено.\nВставьте текст заявки вручную.";
-          updNotes.classList.add("has-issues");
-          return show("Нужен текст заявки");
+        if (!text && !updImageDataUrls.length) return show("Вставьте текст или скрины заявки");
+
+        if (!text && updImageDataUrls.length) {
+          if (!window.CVZ_NEED_OCR) {
+            updNotes.value = "OCR-модуль не загрузился. Обновите страницу (нужен интернет).";
+            updNotes.classList.add("has-issues");
+            return show("Нет OCR");
+          }
+          btn.disabled = true;
+          try {
+            show("Распознаю скрины…");
+            updNotes.value = "Распознаю " + updImageDataUrls.length + " фото…\nПервый раз может занять минуту (скачивается словарь).";
+            updNotes.classList.remove("has-issues");
+            const ocrText = await CVZ_NEED_OCR.recognizeImages(updImageDataUrls, (info) => {
+              if (info.phase === "image") {
+                updNotes.value =
+                  "Распознаю фото " + info.index + " из " + info.total + "…";
+              } else if (info.status === "loading language traineddata") {
+                updNotes.value = "Загружаю словарь OCR (один раз)…";
+              } else if (info.status === "recognizing text" && typeof info.progress === "number") {
+                updNotes.value =
+                  "Распознаю… " + Math.round(info.progress * 100) + "%";
+              }
+            });
+            text = String(ocrText || "").trim();
+            if (!text) {
+              updNotes.value = "Не удалось распознать текст на скринах. Попробуйте более чёткий снимок или вставьте текст.";
+              updNotes.classList.add("has-issues");
+              return show("OCR пусто");
+            }
+            updBlob.value = text;
+            show("Текст распознан");
+          } catch (err) {
+            updNotes.value = "Ошибка OCR: " + (err.message || err) + "\nНужен интернет (CDN Tesseract). Можно вставить текст вручную.";
+            updNotes.classList.add("has-issues");
+            return show("Ошибка OCR");
+          } finally {
+            btn.disabled = false;
+          }
         }
+
         if (!updIndexRows.length) {
           const ok = await loadPotrebnostIndex();
           if (!ok || !updIndexRows.length) {
@@ -719,6 +802,9 @@
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
         let report = CVZ_NEED.formatNotes(plan);
+        if (updImageDataUrls.length && updBlob.value.trim() === text) {
+          report = "OCR: " + updImageDataUrls.length + " фото → текст в поле заявки (можно поправить).\n" + report;
+        }
         const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.noMaxHits && plan.noMaxHits.length);
         updNotes.classList.toggle("has-issues", hasQuestions);
 

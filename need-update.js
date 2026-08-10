@@ -53,7 +53,13 @@
     let hasSp = false;
     const roles = [];
 
-    const family = text.match(/(\d+)\s*семейн\w*(?:\s*(?:места|пар[ыа])?)?/i) || text.match(/(\d+)\s*сп\b/i);
+    text = text.replace(/приоритет/gi, " ");
+
+    // ЯППИ: 1СЕМ.ПАР / 2 сем пар; PR: 2 семейных места; NСП
+    const family =
+      text.match(/(\d+)\s*сем\.?\s*пар\w*/i) ||
+      text.match(/(\d+)\s*семейн\w*(?:\s*(?:места|пар[ыа])?)?/i) ||
+      text.match(/(\d+)\s*сп(?=[^а-яёa-z]|$)/i);
     if (family) {
       sp = parseInt(family[1], 10);
       hasSp = true;
@@ -157,6 +163,196 @@
       });
     }
     return items;
+  }
+
+  function cleanYappiLoc(s) {
+    return String(s || "")
+      .replace(/^г\.?\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function looksLikeYappiNeed(cell) {
+    const t = String(cell || "");
+    return /\d+\s*[мжmМЖ]/i.test(t) || /\d+\s*сем/i.test(t);
+  }
+
+  function colIdx(header, names) {
+    for (let i = 0; i < header.length; i++) {
+      const h = header[i];
+      if (names.some((n) => h.includes(n))) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * ЯППИ SeaTable: ПРОЕКТ | ПОТРЕБНОСТЬ | ВАКАНСИЯ | ЛОКАЦИЯ | …
+   * Вставка — табы (копипаст из таблицы) или строки «ПРОЕКТ  NМ/NЖ  …».
+   * Несколько строк одного проекта оставляем отдельными: matchItems потом сольёт в один ID.
+   */
+  function parseYappi(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const items = [];
+
+    function pushRow(project, needCell, vacancy, location) {
+      const proj = String(project || "").replace(/\s+/g, " ").trim();
+      if (!proj || /^#+$/.test(proj) || /^проект$/i.test(proj)) return;
+      if (/потребност|ваканси|локаци|график|аванс|зарплат/i.test(proj) && proj.length < 40) return;
+      if (!looksLikeYappiNeed(needCell)) return;
+      const counts = parseCountBlock(needCell);
+      if (!counts.hasM && !counts.hasZh && !counts.hasSp) return;
+      const need = finalizeSp(counts);
+      const loc = cleanYappiLoc(location);
+      const place = loc ? proj + ", " + loc : proj;
+      items.push({
+        raw: [proj, needCell, vacancy, loc].filter(Boolean).join(" | "),
+        place,
+        project: proj,
+        vacancy: String(vacancy || "").replace(/\s+/g, " ").trim(),
+        location: loc,
+        ...need,
+        roles: counts.roles || [],
+      });
+    }
+
+    const hasTabs = lines.some((l) => l.includes("\t"));
+    if (hasTabs) {
+      let header = null;
+      for (const line of lines) {
+        const cols = line.split("\t").map((c) => c.replace(/\s+/g, " ").trim());
+        const njoin = norm(cols.join(" "));
+        if (!header && /проект/.test(njoin) && /потребност/.test(njoin)) {
+          header = cols.map((c) => norm(c));
+          continue;
+        }
+        let project = "";
+        let needCell = "";
+        let vacancy = "";
+        let location = "";
+        if (header) {
+          const ip = colIdx(header, ["проект"]);
+          const ineed = colIdx(header, ["потребност"]);
+          const iv = colIdx(header, ["ваканси"]);
+          const il = colIdx(header, ["локаци"]);
+          project = ip >= 0 ? cols[ip] : "";
+          needCell = ineed >= 0 ? cols[ineed] : "";
+          vacancy = iv >= 0 ? cols[iv] : "";
+          location = il >= 0 ? cols[il] : "";
+        } else {
+          let start = 0;
+          if (/^\d+$/.test(cols[0])) start = 1;
+          project = cols[start] || "";
+          needCell = cols[start + 1] || "";
+          vacancy = cols[start + 2] || "";
+          location = cols[start + 3] || "";
+          // иногда потребность во 2-й колонке без #, но need уехала
+          if (!looksLikeYappiNeed(needCell)) {
+            const hit = cols.findIndex(looksLikeYappiNeed);
+            if (hit > 0) {
+              project = cols.slice(start, hit).join(" ").trim() || project;
+              needCell = cols[hit];
+              vacancy = cols[hit + 1] || vacancy;
+              location = cols[hit + 2] || location;
+            }
+          }
+        }
+        pushRow(project, needCell, vacancy, location);
+      }
+      return items;
+    }
+
+    // без табов: «ПРОЕКТ … 4Ж …» или «ПРОЕКТ | 4Ж | …» или OCR (потребность на следующей строке)
+    let lastProject = "";
+    let lastVacancy = "";
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/проект.*потребност/i.test(line) && line.length < 80) continue;
+      const pipe = line.split("|").map((x) => x.trim());
+      if (pipe.length >= 2 && looksLikeYappiNeed(pipe[1])) {
+        pushRow(pipe[0], pipe[1], pipe[2] || "", pipe[3] || "");
+        lastProject = pipe[0];
+        continue;
+      }
+      // почти только потребность (OCR вынес тег отдельно): «4Ж», «2Ж, 1СЕМ.ПАР», «10Ж ПРИОРИТЕТ»
+      const needOnly = line.match(
+        /^(\d+\s*[мжМЖmfw](?:\s*,\s*\d+\s*(?:[мжМЖmfw]|сем\.?\s*пар\w*))*(?:\s*,?\s*приоритет)?|\d+\s*сем\.?\s*пар\w*(?:\s*,?\s*приоритет)?)\s*$/i
+      );
+      if (needOnly && lastProject) {
+        const locLine = lines[i + 1] || "";
+        const loc = /^г\.?\s*/i.test(locLine) || /область|край|республик/i.test(locLine) ? locLine : "";
+        pushRow(lastProject, needOnly[1], lastVacancy, loc);
+        continue;
+      }
+      const m = line.match(
+        /^(.+?)\s+(\d+\s*[мжМЖmfw](?:\s*,\s*\d+\s*(?:[мжМЖmfw]|сем\.?\s*пар\w*))*(?:\s*,?\s*приоритет)?|\d+\s*сем\.?\s*пар\w*)\b(.*)$/i
+      );
+      if (m) {
+        const rest = (m[3] || "").trim();
+        const restParts = rest.split(/\s{2,}|\t/).map((x) => x.trim()).filter(Boolean);
+        pushRow(m[1], m[2], restParts[0] || "", restParts[1] || "");
+        lastProject = m[1];
+        lastVacancy = restParts[0] || "";
+        continue;
+      }
+      // строка-кандидат в проект (заглавные / длинное имя без «руб»)
+      if (
+        line.length >= 4 &&
+        line.length <= 80 &&
+        !/руб|смен|график|аванс|зарплат|заселен/i.test(line) &&
+        !looksLikeYappiNeed(line)
+      ) {
+        lastProject = line.replace(/^\d+\s+/, "").trim();
+        lastVacancy = "";
+      } else if (/упаков|уборщ|грузчик|подсоб|фасов|мойщ|комплект|монтаж|оператор|разнораб/i.test(line)) {
+        lastVacancy = line;
+      }
+    }
+    return items;
+  }
+
+  function numNeed(v) {
+    const n = parseInt(String(v || "").trim(), 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  /** Сложить две строки заявки, попавшие в один ID Sheet (Бимбо 1Ж + 8М). */
+  function mergeNeedItems(a, b) {
+    const m = numNeed(a.m) + numNeed(b.m);
+    const zh = numNeed(a.zh) + numNeed(b.zh);
+    const hasM = !!(a.m || b.m);
+    const hasZh = !!(a.zh || b.zh);
+    let spNum = 0;
+    let hasSpNum = false;
+    for (const x of [a, b]) {
+      if (x.sp && x.sp !== "да" && /^\d+$/.test(String(x.sp))) {
+        spNum += parseInt(x.sp, 10);
+        hasSpNum = true;
+      }
+    }
+    let sp = "";
+    if (hasSpNum) sp = String(spNum);
+    else if (hasM && hasZh) sp = "да";
+    return {
+      ...a,
+      place: a.place || b.place,
+      vacancy: [a.vacancy, b.vacancy].filter(Boolean).join(" + "),
+      raw: (a.raw || "") + " || " + (b.raw || ""),
+      m: hasM ? String(m) : "",
+      zh: hasZh ? String(zh) : "",
+      sp,
+      roles: [].concat(a.roles || [], b.roles || []),
+    };
+  }
+
+  function jobScore(vacancy, job) {
+    if (!vacancy || !job) return 0;
+    const j = norm(job);
+    let s = 0;
+    for (const t of tokens(vacancy)) {
+      if (j.includes(t)) s += t.length >= 5 ? 3 : 2;
+    }
+    return s;
   }
 
   function editDistance(a, b) {
@@ -281,39 +477,53 @@
     const missing = [];
     const noMaxHits = [];
 
+    function rankPool(list, it) {
+      return list
+        .map((r) => {
+          let s = scoreMatch(it.place, r);
+          const js = jobScore(it.vacancy, r.job);
+          if (js) s += js;
+          return { r, s };
+        })
+        .filter((x) => x.s >= 4)
+        .sort((a, b) => b.s - a.s);
+    }
+
+    function takeMatch(it, row, score) {
+      if (!hasMax(row)) {
+        noMaxHits.push({ item: it, row });
+        return;
+      }
+      const prev = matched.find((m) => String(m.row.id) === String(row.id));
+      if (prev) {
+        prev.item = mergeNeedItems(prev.item, it);
+        prev.score = Math.max(prev.score || 0, score || 0);
+        return;
+      }
+      if (used.has(row.id)) {
+        ambiguous.push({
+          item: it,
+          candidates: [{ id: row.id, object: row.object }],
+          note: "ID уже занят другой строкой заявки",
+        });
+        return;
+      }
+      used.add(row.id);
+      matched.push({ item: it, row, score });
+    }
+
     for (const it of items) {
       const forced = aliasMatch(it, poolAll, customer);
       if (forced) {
-        if (!hasMax(forced)) {
-          noMaxHits.push({ item: it, row: forced });
-          continue;
-        }
-        if (used.has(forced.id)) {
-          ambiguous.push({
-            item: it,
-            candidates: [{ id: forced.id, object: forced.object }],
-            note: "ID из правила уже занят",
-          });
-          continue;
-        }
-        used.add(forced.id);
-        matched.push({ item: it, row: forced, score: 100 });
+        takeMatch(it, forced, 100);
         continue;
       }
 
-      const ranked = pool
-        .map((r) => ({ r, s: scoreMatch(it.place, r) }))
-        .filter((x) => x.s >= 4)
-        .sort((a, b) => b.s - a.s);
-
+      const ranked = rankPool(pool, it);
       const top = ranked[0];
       const second = ranked[1];
       if (!top) {
-        // может быть только строка без МАКС
-        const rankedEmpty = poolNoMax
-          .map((r) => ({ r, s: scoreMatch(it.place, r) }))
-          .filter((x) => x.s >= 4)
-          .sort((a, b) => b.s - a.s);
+        const rankedEmpty = rankPool(poolNoMax, it);
         if (rankedEmpty[0]) {
           noMaxHits.push({ item: it, row: rankedEmpty[0].r });
         } else {
@@ -322,22 +532,24 @@
         continue;
       }
       if (second && top.s - second.s < 1.5 && second.s >= 4) {
+        // доматч по вакансии, если она есть
+        if (it.vacancy) {
+          const byJob = ranked
+            .map((x) => ({ ...x, js: jobScore(it.vacancy, x.r.job) }))
+            .filter((x) => x.js > 0)
+            .sort((a, b) => b.js - a.js || b.s - a.s);
+          if (byJob[0] && (!byJob[1] || byJob[0].js > byJob[1].js)) {
+            takeMatch(it, byJob[0].r, byJob[0].s);
+            continue;
+          }
+        }
         ambiguous.push({
           item: it,
           candidates: ranked.slice(0, 3).map((x) => ({ id: x.r.id, object: x.r.object })),
         });
         continue;
       }
-      if (used.has(top.r.id)) {
-        ambiguous.push({
-          item: it,
-          candidates: ranked.slice(0, 3).map((x) => ({ id: x.r.id, object: x.r.object })),
-          note: "ID уже занят другой строкой заявки",
-        });
-        continue;
-      }
-      used.add(top.r.id);
-      matched.push({ item: it, row: top.r, score: top.s });
+      takeMatch(it, top.r, top.s);
     }
     return { matched, ambiguous, missing, noMaxHits, pool, poolAll, used };
   }
@@ -405,7 +617,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -537,17 +749,22 @@
     for (const m of missing) {
       lines.push("• " + oneLine(m.place) + " — " + fmtNeed(m));
     }
+    for (const n of plan.notes || []) {
+      lines.push(n);
+    }
     return lines.join("\n");
   }
 
   const customerParsers = {
     personalresourse: parsePersonalResourse,
+    яппи: parseYappi,
   };
 
   global.CVZ_NEED = {
     buildPlan,
     formatNotes,
     parsePersonalResourse,
+    parseYappi,
     setAliases,
     norm,
   };
