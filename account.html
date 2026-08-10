@@ -229,7 +229,7 @@
 
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=3"></script>
+  <script src="need-update.js?v=4"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -699,6 +699,11 @@
         .then((d) => { updSheetsCfg = d; })
         .catch(() => { updSheetsCfg = null; });
 
+      fetch("need-aliases.json?t=" + Date.now())
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => { if (window.CVZ_NEED && CVZ_NEED.setAliases) CVZ_NEED.setAliases(d); })
+        .catch(() => {});
+
       function refreshSaStatus() {
         const el = document.getElementById("updSaStatus");
         if (!el) return;
@@ -804,11 +809,11 @@
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
         let report = CVZ_NEED.formatNotes(plan);
-        const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.clearedSuggested && plan.clearedSuggested.length);
+        const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length);
         updNotes.classList.toggle("has-issues", hasQuestions);
 
-        const canWrite = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa() && updSheetsCfg && updSheetsCfg.spreadsheetId;
-        // Пишем только однозначные обновления; вопросы — в отчёте, без блокировки всей пачки
+        const hasSa = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa();
+        const canWrite = hasSa && updSheetsCfg && updSheetsCfg.spreadsheetId;
         const rowsToWrite = (plan.updates || []).filter((u) => {
           const changed = String(u.from_m || "") !== String(u.m || "") || String(u.from_zh || "") !== String(u.zh || "") || String(u.from_sp || "") !== String(u.sp || "") || u.update_job;
           return changed && u.sheetRow;
@@ -825,8 +830,8 @@
         }
 
         if (!canWrite) {
-          updNotes.value = report;
-          return show("План готов (без записи)");
+          updNotes.value = report + "\n\nзапись не сделана: " + (!hasSa ? "нет ключа SA (загрузите в блоке ниже)" : "не загрузился sheets-config.json");
+          return show(!hasSa ? "Нет ключа SA" : "Нет конфига Sheet");
         }
 
         try {

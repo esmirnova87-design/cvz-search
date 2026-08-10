@@ -159,6 +159,23 @@
     return items;
   }
 
+  function editDistance(a, b) {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > 2) return 99;
+    const aa = a;
+    const bb = b;
+    const dp = Array.from({ length: aa.length + 1 }, () => []);
+    for (let i = 0; i <= aa.length; i++) dp[i][0] = i;
+    for (let j = 0; j <= bb.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= aa.length; i++) {
+      for (let j = 1; j <= bb.length; j++) {
+        const cost = aa[i - 1] === bb[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      }
+    }
+    return dp[aa.length][bb.length];
+  }
+
   function scoreMatch(place, row) {
     const o = norm(row.object);
     const pt = tokens(place);
@@ -178,7 +195,22 @@
       return [...out];
     }
     function tokenIn(hay, t) {
-      return expand(t).some((a) => a.length >= 3 && hay.includes(a));
+      for (const a of expand(t)) {
+        if (a.length < 3) continue;
+        if (hay.includes(a)) return true;
+        // овощи ↔ овощей: общий корень
+        if (a.length >= 4) {
+          const stem = a.slice(0, Math.min(5, a.length - (a.length > 5 ? 1 : 0)));
+          if (stem.length >= 4 && hay.includes(stem)) return true;
+        }
+        // опечатка в 1 букву (старотитаровская / старотиторовская)
+        if (a.length >= 8) {
+          const words = hay.split(/\s+/);
+          const maxD = a.length >= 12 ? 2 : 1;
+          if (words.some((w) => w.length >= 6 && editDistance(w, a) <= maxD)) return true;
+        }
+      }
+      return false;
     }
 
     const generic = /производ|комбинат|фабрик|склад|отель|мяс|кондитер|пищев|завод|цех|объект|вакан/;
@@ -194,7 +226,7 @@
     if (geoToks.length && !geoHit) return 0;
 
     const distinctive = pt.filter((t) =>
-      /чипс|плитк|чай|фарм|наггет|крабов|бортпит|рыб|хлеб|овощ|одежд|тепловой|винзавод|ликер|кондитерк/.test(t)
+      /чипс|плитк|чай|фарм|наггет|крабов|бортпит|рыб|хлеб|овощ|одежд|тепловой|винзавод|ликер|кондитерк|готов/.test(t)
     );
 
     let score = 0;
@@ -209,10 +241,30 @@
     if (geoHit) score += 5;
     for (const t of distinctive) {
       if (tokenIn(o, t)) score += 6;
-      else score -= 8;
+      else score -= 4;
     }
     score += (hit / pt.length) * 4;
     return score;
+  }
+
+  let NEED_ALIASES = {};
+
+  function setAliases(data) {
+    NEED_ALIASES = data || {};
+  }
+
+  function aliasMatch(item, pool, customer) {
+    const list = NEED_ALIASES[customer] || NEED_ALIASES[norm(customer)] || [];
+    const place = norm(item.place);
+    for (const rule of list) {
+      const keys = rule.all || rule.match || [];
+      if (!keys.length) continue;
+      if (keys.every((k) => place.includes(norm(k)))) {
+        const row = pool.find((r) => String(r.id) === String(rule.id));
+        if (row) return row;
+      }
+    }
+    return null;
   }
 
   function matchItems(items, rows, customer) {
@@ -223,6 +275,21 @@
     const missing = [];
 
     for (const it of items) {
+      const forced = aliasMatch(it, pool, customer);
+      if (forced) {
+        if (used.has(forced.id)) {
+          ambiguous.push({
+            item: it,
+            candidates: [{ id: forced.id, object: forced.object }],
+            note: "ID из правила уже занят",
+          });
+          continue;
+        }
+        used.add(forced.id);
+        matched.push({ item: it, row: forced, score: 100 });
+        continue;
+      }
+
       const ranked = pool
         .map((r) => ({ r, s: scoreMatch(it.place, r) }))
         .filter((x) => x.s >= 4)
@@ -341,7 +408,6 @@
 
     const { matched, ambiguous, missing, pool, used } = matchItems(items, indexRows, customer);
     const updates = [];
-    const notes = [];
 
     for (const { item, row } of matched) {
       const jobUpd = maybeUpdateJob(row, item);
@@ -363,16 +429,26 @@
       });
     }
 
-    const clearedSuggested = [];
+    // Нет в заявке = людей не нужно = очищаем М/Ж/СП автоматически
     for (const r of pool) {
       if (used.has(r.id)) continue;
       if (!(r.m || r.zh || r.sp)) continue;
-      clearedSuggested.push({
+      updates.push({
         id: r.id,
+        sheetRow: r.sheetRow,
         object: r.object,
+        place: "",
         from_m: r.m,
         from_zh: r.zh,
         from_sp: r.sp,
+        m: "",
+        zh: "",
+        sp: "",
+        update_job: false,
+        job: r.job,
+        from_job: r.job,
+        rate: r.rate,
+        clear: true,
       });
     }
 
@@ -384,8 +460,8 @@
       ambiguous,
       missing,
       cleared: [],
-      clearedSuggested,
-      notes,
+      clearedSuggested: [],
+      notes: [],
     };
   }
 
@@ -413,39 +489,18 @@
     );
     const ambiguous = plan.ambiguous || [];
     const missing = plan.missing || [];
-    const cleared = plan.clearedSuggested || [];
-    const decide = [...ambiguous];
 
     lines.push("заявка: " + (plan.itemsCount || 0));
     lines.push("обновлено: " + changed.length);
-
-    const decideCount = ambiguous.length + cleared.length;
-    lines.push("решить: " + decideCount);
+    lines.push("решить: " + ambiguous.length);
     for (const a of ambiguous) {
       const ids = (a.candidates || []).map((c) => "ID " + c.id).join(" или ");
       lines.push("• " + oneLine(a.item.place) + " — " + fmtNeed(a.item) + " → " + (ids || "?") + (a.note ? " (" + a.note + ")" : ""));
     }
-    for (const c of cleared) {
-      lines.push(
-        "• в заявке нет, в таблице есть ID " +
-          c.id +
-          " " +
-          shortObj(c.object) +
-          " (" +
-          (c.from_m || "0") +
-          "/" +
-          (c.from_zh || "0") +
-          "/" +
-          (c.from_sp || "—") +
-          ") — снять?"
-      );
-    }
-
     lines.push("новые: " + missing.length);
     for (const m of missing) {
       lines.push("• " + oneLine(m.place) + " — " + fmtNeed(m));
     }
-
     return lines.join("\n");
   }
 
@@ -457,6 +512,7 @@
     buildPlan,
     formatNotes,
     parsePersonalResourse,
+    setAliases,
     norm,
   };
 })(window);
