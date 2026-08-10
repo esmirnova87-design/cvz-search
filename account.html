@@ -229,7 +229,7 @@
 
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=2"></script>
+  <script src="need-update.js?v=3"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -825,22 +825,17 @@
         }
 
         if (!canWrite) {
-          report =
-            "План готов (запись в Sheet выключена — нет ключа SA или не github.io).\n\n" +
-            report;
           updNotes.value = report;
           return show("План готов (без записи)");
         }
 
         try {
           const writePlan = { updates: rowsToWrite, cleared: [] };
-          const res = await CVZ_SHEETS_WRITE.applyPlan(writePlan, updSheetsCfg);
-          report = "Записано в таблицу: " + rowsToWrite.length + " строк (" + (res.updated || 0) + " ячеек).\n\n" + report;
+          await CVZ_SHEETS_WRITE.applyPlan(writePlan, updSheetsCfg);
           updNotes.value = report;
           show(hasQuestions ? "Записано, есть вопросы" : "Готово");
         } catch (err) {
-          report = "Ошибка записи: " + (err.message || err) + "\n\n" + report;
-          updNotes.value = report;
+          updNotes.value = "Ошибка записи: " + (err.message || err) + "\n\n" + report;
           updNotes.classList.add("has-issues");
           show("Ошибка записи");
         }

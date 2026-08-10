@@ -403,48 +403,49 @@
   function formatNotes(plan) {
     if (!plan) return "";
     const lines = [];
-    const changed = (plan.updates || []).filter(
+    const updates = plan.updates || [];
+    const changed = updates.filter(
       (u) =>
         !sameNeed(u.from_m, u.m) ||
         !sameNeed(u.from_zh, u.zh) ||
         !sameNeed(u.from_sp, u.sp) ||
         u.update_job
     );
+    const ambiguous = plan.ambiguous || [];
+    const missing = plan.missing || [];
+    const cleared = plan.clearedSuggested || [];
+    const decide = [...ambiguous];
 
-    lines.push(
-      `Разбор: строк ${plan.itemsCount || 0}, обновить ${changed.length}, уточнить ${(plan.ambiguous || []).length}, новых ${(plan.missing || []).length}`
-    );
+    lines.push("заявка: " + (plan.itemsCount || 0));
+    lines.push("обновлено: " + changed.length);
 
-    if (changed.length) {
-      lines.push("");
-      lines.push("Изменения:");
-      for (const u of changed) {
-        const from = [u.from_m || "0", u.from_zh || "0", u.from_sp || "—"].join("/");
-        const to = [u.m || "0", u.zh || "0", u.sp || "—"].join("/");
-        lines.push(`• ID ${u.id} ${shortObj(u.object)}: ${from} → ${to}`);
-      }
-    }
-
-    const questions = [];
-    for (const a of plan.ambiguous || []) {
+    const decideCount = ambiguous.length + cleared.length;
+    lines.push("решить: " + decideCount);
+    for (const a of ambiguous) {
       const ids = (a.candidates || []).map((c) => "ID " + c.id).join(" или ");
-      questions.push(`«${shortObj(a.item.place)}» — ${ids}? (${fmtNeed(a.item)})`);
+      lines.push("• " + oneLine(a.item.place) + " — " + fmtNeed(a.item) + " → " + (ids || "?") + (a.note ? " (" + a.note + ")" : ""));
     }
-    for (const m of plan.missing || []) {
-      questions.push(`Новый объект: «${shortObj(m.place)}» (${fmtNeed(m)})`);
-    }
-    for (const c of plan.clearedSuggested || []) {
-      questions.push(
-        `В заявке нет, в таблице есть: ID ${c.id} ${shortObj(c.object)} (${c.from_m || "0"}/${c.from_zh || "0"}/${c.from_sp || "—"})`
+    for (const c of cleared) {
+      lines.push(
+        "• в заявке нет, в таблице есть ID " +
+          c.id +
+          " " +
+          shortObj(c.object) +
+          " (" +
+          (c.from_m || "0") +
+          "/" +
+          (c.from_zh || "0") +
+          "/" +
+          (c.from_sp || "—") +
+          ") — снять?"
       );
     }
-    if (questions.length) {
-      lines.push("");
-      lines.push("Нужно решить:");
-      questions.forEach((q) => lines.push("• " + q));
+
+    lines.push("новые: " + missing.length);
+    for (const m of missing) {
+      lines.push("• " + oneLine(m.place) + " — " + fmtNeed(m));
     }
 
-    if (!changed.length && !questions.length) lines.push("Изменений нет.");
     return lines.join("\n");
   }
 
