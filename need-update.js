@@ -965,27 +965,54 @@
       });
     }
 
-    // Нет в заявке = людей не нужно = очищаем М/Ж/СП (только строки с заполненным МАКС)
+    // Нет в заявке = очищаем М/Ж/СП (только с МАКС).
+    // Защита: если заявка разобрана слишком коротко (OCR вытащил 1 строку из таблицы) —
+    // автоочистку НЕ делаем, иначе обнулим весь заказчик.
+    const clearCandidates = [];
     for (const r of pool) {
       if (used.has(r.id)) continue;
       if (!(r.m || r.zh || r.sp)) continue;
-      updates.push({
-        id: r.id,
-        sheetRow: r.sheetRow,
-        object: r.object,
-        place: "",
-        from_m: r.m,
-        from_zh: r.zh,
-        from_sp: r.sp,
-        m: "",
-        zh: "",
-        sp: "",
-        update_job: false,
-        job: r.job,
-        from_job: r.job,
-        rate: r.rate,
-        clear: true,
-      });
+      clearCandidates.push(r);
+    }
+    const notes = [];
+    const sparseApp =
+      items.length < 5 || clearCandidates.length > Math.max(5, items.length * 2);
+    if (sparseApp && clearCandidates.length) {
+      notes.push(
+        "Автоочистку НЕ делаю: в заявке всего " +
+          items.length +
+          " строк, а очистить пришлось бы " +
+          clearCandidates.length +
+          " объектов — похоже, заявка разобрана не полностью (часто OCR). Обновляю только найденное."
+      );
+      notes.push(
+        "Не очищены (проверьте вручную при необходимости): " +
+          clearCandidates
+            .slice(0, 12)
+            .map((r) => "ID " + r.id)
+            .join(", ") +
+          (clearCandidates.length > 12 ? "…" : "")
+      );
+    } else {
+      for (const r of clearCandidates) {
+        updates.push({
+          id: r.id,
+          sheetRow: r.sheetRow,
+          object: r.object,
+          place: "",
+          from_m: r.m,
+          from_zh: r.zh,
+          from_sp: r.sp,
+          m: "",
+          zh: "",
+          sp: "",
+          update_job: false,
+          job: r.job,
+          from_job: r.job,
+          rate: r.rate,
+          clear: true,
+        });
+      }
     }
 
     return {
@@ -997,8 +1024,8 @@
       missing,
       noMaxHits: noMaxHits || [],
       cleared: [],
-      clearedSuggested: [],
-      notes: [],
+      clearedSuggested: sparseApp ? clearCandidates : [],
+      notes,
     };
   }
 
