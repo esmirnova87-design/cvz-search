@@ -239,8 +239,8 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=8"></script>
-  <script src="need-ocr.js?v=1"></script>
+  <script src="need-update.js?v=9"></script>
+  <script src="need-ocr.js?v=2"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -750,7 +750,8 @@
         if (!customer) return show("Выберите заказчика");
         if (!text && !updImageDataUrls.length) return show("Вставьте текст или скрины заявки");
 
-        if (!text && updImageDataUrls.length) {
+        // Есть скрины → всегда OCR заново (сценарий «кинула только картинки»)
+        if (updImageDataUrls.length) {
           if (!window.CVZ_NEED_OCR) {
             updNotes.value = "OCR-модуль не загрузился. Обновите страницу (нужен интернет).";
             updNotes.classList.add("has-issues");
@@ -762,14 +763,14 @@
             updNotes.value = "Распознаю " + updImageDataUrls.length + " фото…\nПервый раз может занять минуту (скачивается словарь).";
             updNotes.classList.remove("has-issues");
             const ocrText = await CVZ_NEED_OCR.recognizeImages(updImageDataUrls, (info) => {
-              if (info.phase === "image") {
-                updNotes.value =
-                  "Распознаю фото " + info.index + " из " + info.total + "…";
+              if (info.phase === "preprocess") {
+                updNotes.value = "Готовлю фото " + info.index + " из " + info.total + "…";
+              } else if (info.phase === "image") {
+                updNotes.value = "Распознаю фото " + info.index + " из " + info.total + "…";
               } else if (info.status === "loading language traineddata") {
                 updNotes.value = "Загружаю словарь OCR (один раз)…";
               } else if (info.status === "recognizing text" && typeof info.progress === "number") {
-                updNotes.value =
-                  "Распознаю… " + Math.round(info.progress * 100) + "%";
+                updNotes.value = "Распознаю… " + Math.round(info.progress * 100) + "%";
               }
             });
             text = String(ocrText || "").trim();
@@ -802,11 +803,21 @@
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
         let report = CVZ_NEED.formatNotes(plan);
-        if (updImageDataUrls.length && updBlob.value.trim() === text) {
+        if (updImageDataUrls.length) {
           report = "OCR: " + updImageDataUrls.length + " фото → текст в поле заявки (можно поправить).\n" + report;
         }
+        if ((!plan.ok || !(plan.itemsCount > 0)) && text) {
+          const preview = text.length > 1200 ? text.slice(0, 1200) + "\n…" : text;
+          report += "\n\n--- что увидел OCR (проверьте поле заявки) ---\n" + preview;
+          updNotes.classList.add("has-issues");
+        }
         const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.noMaxHits && plan.noMaxHits.length);
-        updNotes.classList.toggle("has-issues", hasQuestions);
+        updNotes.classList.toggle("has-issues", hasQuestions || !plan.ok);
+
+        if (!plan.ok || !(plan.itemsCount > 0)) {
+          updNotes.value = report;
+          return show("Не разобрала заявку");
+        }
 
         const hasSa = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa();
         const canWrite = hasSa && updSheetsCfg && updSheetsCfg.spreadsheetId;

@@ -177,6 +177,67 @@
     return /\d+\s*[мжmМЖ]/i.test(t) || /\d+\s*сем/i.test(t);
   }
 
+  /** Починка типичного OCR: латиница вместо кириллицы в М/Ж/СЕМ.ПАР */
+  function normalizeYappiOcrText(text) {
+    return String(text || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/(\d)\s*[MmМм]/g, "$1М")
+      .replace(/(\d)\s*[XxЖж]/g, "$1Ж")
+      .replace(/(\d)\s*[KkКк]/g, "$1Ж")
+      .replace(/CEM\.?\s*PAR/gi, "СЕМ.ПАР")
+      .replace(/CEM\.?\s*ПАР/gi, "СЕМ.ПАР")
+      .replace(/СЕМ\s+ПАР/gi, "СЕМ.ПАР")
+      .replace(/ПРИО\s*РИТЕТ/gi, "ПРИОРИТЕТ")
+      .replace(/ПРИОР[И1]ТЕТ/gi, "ПРИОРИТЕТ");
+  }
+
+  /**
+   * Грязный OCR: ищем NМ/NЖ/СЕМ.ПАР и тянем название проекта из текста слева.
+   */
+  function parseYappiLoose(text) {
+    const raw = normalizeYappiOcrText(text);
+    const items = [];
+    const re =
+      /(\d{1,2})\s*(М|Ж|СЕМ\.ПАР)(?:\s*[,/\\+]?\s*(\d{1,2})\s*(М|Ж|СЕМ\.ПАР))?(?:\s*[,/\\+]?\s*(\d{1,2})\s*(М|Ж|СЕМ\.ПАР))?/gi;
+    let m;
+    while ((m = re.exec(raw))) {
+      const needCell = m[0];
+      const counts = parseCountBlock(needCell.replace(/приоритет/gi, " "));
+      if (!counts.hasM && !counts.hasZh && !counts.hasSp) continue;
+      const before = raw.slice(Math.max(0, m.index - 120), m.index);
+      const chunks = before
+        .split(/[\n|]/)
+        .map((x) => x.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      let project = "";
+      for (let i = chunks.length - 1; i >= 0; i--) {
+        const c = chunks[i];
+        if (looksLikeYappiNeed(c)) continue;
+        if (/руб|смен|час|аванс|график|компенс|вакт|день|ночь|сутки|еженед/i.test(c)) continue;
+        if (c.length < 3 || c.length > 90) continue;
+        if (/^\d+$/.test(c)) continue;
+        project = c.replace(/^\d{1,3}\s+/, "").trim();
+        break;
+      }
+      if (!project) continue;
+      const after = raw.slice(m.index + m[0].length, m.index + m[0].length + 80);
+      const locM = after.match(/г\.?\s*([А-Яа-яЁёA-Za-z\-]{3,})/);
+      const loc = locM ? locM[0] : "";
+      const need = finalizeSp(counts);
+      const place = loc ? project + ", " + cleanYappiLoc(loc) : project;
+      items.push({
+        raw: needCell + " @ " + project,
+        place,
+        project,
+        vacancy: "",
+        location: cleanYappiLoc(loc),
+        ...need,
+        roles: counts.roles || [],
+      });
+    }
+    return items;
+  }
+
   function colIdx(header, names) {
     for (let i = 0; i < header.length; i++) {
       const h = header[i];
@@ -191,7 +252,7 @@
    * Несколько строк одного проекта оставляем отдельными: matchItems потом сольёт в один ID.
    */
   function parseYappi(text) {
-    const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const raw = normalizeYappiOcrText(String(text || "")).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
     const items = [];
 
@@ -259,7 +320,7 @@
         }
         pushRow(project, needCell, vacancy, location);
       }
-      return items;
+      if (items.length) return items;
     }
 
     // без табов: «ПРОЕКТ … 4Ж …» или «ПРОЕКТ | 4Ж | …» или OCR (потребность на следующей строке)
@@ -299,7 +360,7 @@
       if (
         line.length >= 4 &&
         line.length <= 80 &&
-        !/руб|смен|график|аванс|зарплат|заселен/i.test(line) &&
+        !/руб|смен|час|график|аванс|зарплат|заселен|компенс/i.test(line) &&
         !looksLikeYappiNeed(line)
       ) {
         lastProject = line.replace(/^\d+\s+/, "").trim();
@@ -308,7 +369,8 @@
         lastVacancy = line;
       }
     }
-    return items;
+    if (items.length) return items;
+    return parseYappiLoose(raw);
   }
 
   function numNeed(v) {
