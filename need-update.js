@@ -18,6 +18,31 @@
       .filter((t) => t.length >= 3 && !/^\d+$/.test(t));
   }
 
+  function shortObj(s) {
+    return oneLine(s).slice(0, 42);
+  }
+
+  function oneLine(s) {
+    return String(s || "").replace(/\s+/g, " ").trim();
+  }
+
+  function guessGender(title) {
+    const t = norm(title);
+    if (/горнич|уборщиц|помощниц|посудомо|комплектовщиц|упаковщиц/.test(t)) return "zh";
+    if (/дворник|хаусмен|карщик|грузчик|охранник/.test(t)) return "m";
+    return "any";
+  }
+
+  function isNoiseTitle(tl) {
+    return /^(график|строгое|только|без|судимост|упаковка|до|лет|час|часов|смен|кондитер|горячий|цех|универсал|по|и|на|от|обл|область|мос|край|места|пар|сп|семейн)/i.test(
+      tl
+    );
+  }
+
+  /**
+   * Важно: в JS \b не считает кириллицу «словом», поэтому после М/Ж границы не ставим.
+   * После буквы пола ждём не-букву или конец: 15М\5Ж, 6М, 4М+1карщик.
+   */
   function parseCountBlock(raw) {
     let text = String(raw || "");
     let m = 0;
@@ -28,13 +53,7 @@
     let hasSp = false;
     const roles = [];
 
-    function isNoiseTitle(tl) {
-      return /^(график|строгое|только|без|судимост|упаковка|до|лет|час|часов|смен|кондитер|горячий|цех|универсал|по|и|на|от|обл|область|мос|край|места|пар|сп|семейн)$/i.test(
-        tl
-      );
-    }
-
-    const family = text.match(/(\d+)\s*(?:семейн\w*\s*(?:места|пар[ыа])?|сп)\b/i);
+    const family = text.match(/(\d+)\s*семейн\w*(?:\s*(?:места|пар[ыа])?)?/i) || text.match(/(\d+)\s*сп\b/i);
     if (family) {
       sp = parseInt(family[1], 10);
       hasSp = true;
@@ -45,30 +64,33 @@
       text = text.replace(family[0], " ");
     }
 
-    // «3М дворники» — цифра+пол+должность
-    text = text.replace(/(\d+)\s*([мжmfw])\s+([а-яёa-z]{3,}(?:\s+[а-яёa-z]{3,}){0,2})/gi, (all, n, g, title) => {
+    // «3М дворники»
+    text = text.replace(/(\d+)\s*([мm])\s+([а-яёa-z]{3,}(?:\s+[а-яёa-z]{3,}){0,2})/gi, (all, n, _g, title) => {
       const first = title.trim().split(/\s+/)[0];
       if (isNoiseTitle(first)) return all;
-      const gender = g.toLowerCase() === "м" || g.toLowerCase() === "m" ? "m" : "zh";
-      roles.push({ count: parseInt(n, 10), title: title.trim(), gender });
+      roles.push({ count: parseInt(n, 10), title: title.trim(), gender: "m" });
+      return " ";
+    });
+    text = text.replace(/(\d+)\s*([жf])\s+([а-яёa-z]{3,}(?:\s+[а-яёa-z]{3,}){0,2})/gi, (all, n, _g, title) => {
+      const first = title.trim().split(/\s+/)[0];
+      if (isNoiseTitle(first)) return all;
+      roles.push({ count: parseInt(n, 10), title: title.trim(), gender: "zh" });
       return " ";
     });
 
-    // голые 10М / 5Ж
-    text = text.replace(/(\d+)\s*([мжmfw])\b/gi, (_, n, g) => {
-      const num = parseInt(n, 10);
-      const gl = g.toLowerCase();
-      if (gl === "м" || gl === "m") {
-        m += num;
-        hasM = true;
-      } else {
-        zh += num;
-        hasZh = true;
-      }
+    // голые 10М / 5Ж (кириллица и латиница)
+    text = text.replace(/(\d+)\s*[мm](?=[^а-яёa-z]|$)/gi, (_, n) => {
+      m += parseInt(n, 10);
+      hasM = true;
+      return " ";
+    });
+    text = text.replace(/(\d+)\s*[жf](?=[^а-яёa-z]|$)/gi, (_, n) => {
+      zh += parseInt(n, 10);
+      hasZh = true;
       return " ";
     });
 
-    // «5 Горничных», «1карщик», «2 хаусмена»
+    // «5 Горничных», «1карщик»
     text = text.replace(/(\d+)\s*([а-яёa-z]{3,}(?:\s+[а-яёa-z]{3,}){0,2})/gi, (all, n, title) => {
       const t = title.trim();
       const first = t.split(/\s+/)[0];
@@ -90,14 +112,6 @@
     return { m, zh, sp, hasM, hasZh, hasSp, roles, raw: String(raw || "") };
   }
 
-  function guessGender(title) {
-    const t = norm(title);
-    if (/горнич|уборщиц|помощниц|посудомо|комплектовщиц|упаковщиц/.test(t)) return "zh";
-    if (/дворник|хаусмен|карщик|грузчик|охранник|повар-мужчина/.test(t)) return "m";
-    // официант / повар — и М и Ж
-    return "any";
-  }
-
   function finalizeSp(counts) {
     let sp = "";
     if (counts.hasSp) sp = String(counts.sp);
@@ -109,7 +123,6 @@
     };
   }
 
-  /** PersonalResourse daily list parser */
   function parsePersonalResourse(text) {
     const lines = String(text || "").split(/\r?\n/);
     const items = [];
@@ -117,7 +130,7 @@
       const clean = line.replace(/[🔥⬇️]/g, "").trim();
       if (!clean || clean.length < 8) continue;
       if (/добрый\s+день|коллеги|потребность\s+на/i.test(clean)) continue;
-      if (!/[❗️!]/.test(line) && !/\d+\s*[мжmfwмМЖ]/i.test(clean) && !/\d+\s*[А-Яа-яЁёA-Za-z]{4,}/.test(clean)) {
+      if (!/[❗️❗!]/.test(line) && !/\d+\s*[мжmfw]/i.test(clean) && !/\d+\s*[А-Яа-яЁёA-Za-z]{4,}/.test(clean)) {
         continue;
       }
 
@@ -126,40 +139,16 @@
       const tail = parts.slice(1).join(" ").trim();
       if (!head) continue;
 
-      // head: CITY, object…
       const headNorm = head.replace(/\s+/g, " ").trim();
-      const counts = parseCountBlock(tail || head);
-      // if counts only found in head (rare)
+      let counts = parseCountBlock(tail || head);
       if (!counts.hasM && !counts.hasZh && !counts.roles.length) {
-        const alt = parseCountBlock(headNorm);
-        Object.assign(counts, alt);
+        counts = parseCountBlock(headNorm);
       }
 
       const need = finalizeSp(counts);
-      // roles-only lines: derive M/Ж where gender known; any-gender roles → note
-      if (!counts.hasM && !counts.hasZh && counts.roles.length) {
-        let m = 0;
-        let zh = 0;
-        let onlyAny = true;
-        for (const r of counts.roles) {
-          if (r.gender === "m") {
-            m += r.count;
-            onlyAny = false;
-          } else if (r.gender === "zh") {
-            zh += r.count;
-            onlyAny = false;
-          }
-        }
-        need.m = m ? String(m) : "";
-        need.zh = zh ? String(zh) : "";
-        need.sp = need.m && need.zh ? "да" : "";
-        need.rolesAny = counts.roles.filter((r) => r.gender === "any");
-        need.onlyRoles = true;
-      } else {
-        need.rolesAny = counts.roles.filter((r) => r.gender === "any");
-        need.onlyRoles = false;
-      }
-      need.roles = counts.roles;
+      need.rolesAny = (counts.roles || []).filter((r) => r.gender === "any");
+      need.onlyRoles = !counts.hasM && !counts.hasZh && !!(counts.roles || []).length;
+      need.roles = counts.roles || [];
 
       items.push({
         raw: clean,
@@ -171,11 +160,9 @@
   }
 
   function scoreMatch(place, row) {
-    const p = norm(place);
     const o = norm(row.object);
-    if (!p || !o) return 0;
     const pt = tokens(place);
-    if (!pt.length) return 0;
+    if (!pt.length || !o) return 0;
 
     const CITY_ALIASES = [
       ["переславль", "переяславль"],
@@ -195,24 +182,20 @@
     }
 
     const generic = /производ|комбинат|фабрик|склад|отель|мяс|кондитер|пищев|завод|цех|объект|вакан/;
-    const segments = String(place).split(",");
     const geoToks = [];
-    segments.forEach((seg) => {
-      tokens(seg).forEach((t) => {
-        if (t.length >= 4 && !generic.test(t)) geoToks.push(t);
+    String(place)
+      .split(",")
+      .forEach((seg) => {
+        tokens(seg).forEach((t) => {
+          if (t.length >= 4 && !generic.test(t)) geoToks.push(t);
+        });
       });
-    });
     const geoHit = geoToks.some((t) => tokenIn(o, t));
     if (geoToks.length && !geoHit) return 0;
 
-    // отличительные слова заявки должны находиться в объекте, если они есть
-    const distinctive = pt.filter((t) => /чипс|плитк|чай|фарм|наггет|крабов|бортпит|рыб|хлеб|овощ|одежд|тепловой|винзавод|ликер|кондитерк/.test(t));
-    if (distinctive.length && !distinctive.some((t) => tokenIn(o, t) || tokenIn(norm(row.job || ""), t))) {
-      // не ноль сразу — но сильно режем, если гео совпало с другим объектом того же города
-      if (!distinctive.some((t) => tokenIn(o, t))) {
-        /* keep going but lower later */
-      }
-    }
+    const distinctive = pt.filter((t) =>
+      /чипс|плитк|чай|фарм|наггет|крабов|бортпит|рыб|хлеб|овощ|одежд|тепловой|винзавод|ликер|кондитерк/.test(t)
+    );
 
     let score = 0;
     let hit = 0;
@@ -229,7 +212,6 @@
       else score -= 8;
     }
     score += (hit / pt.length) * 4;
-    if (hit === 1 && pt.length >= 3 && score < 6) score *= 0.5;
     return score;
   }
 
@@ -255,23 +237,15 @@
       if (second && top.s - second.s < 1.5 && second.s >= 4) {
         ambiguous.push({
           item: it,
-          candidates: ranked.slice(0, 4).map((x) => ({
-            id: x.r.id,
-            object: x.r.object,
-            score: Math.round(x.s * 10) / 10,
-          })),
+          candidates: ranked.slice(0, 3).map((x) => ({ id: x.r.id, object: x.r.object })),
         });
         continue;
       }
       if (used.has(top.r.id)) {
         ambiguous.push({
           item: it,
-          candidates: ranked.slice(0, 4).map((x) => ({
-            id: x.r.id,
-            object: x.r.object,
-            score: Math.round(x.s * 10) / 10,
-          })),
-          note: "Этот ID уже сопоставлен с другой строкой заявки",
+          candidates: ranked.slice(0, 3).map((x) => ({ id: x.r.id, object: x.r.object })),
+          note: "ID уже занят другой строкой заявки",
         });
         continue;
       }
@@ -290,15 +264,12 @@
 
   function maybeUpdateJob(row, item) {
     const lines = jobLines(row.job);
-    // 1 цифра (один пол) и 1 должность
-    const oneGender =
-      (item.m && !item.zh) || (!item.m && item.zh);
+    const oneGender = (item.m && !item.zh) || (!item.m && item.zh);
     if (oneGender && lines.length === 1) {
       const n = item.m || item.zh;
       const base = lines[0].replace(/\s*\d+\s*[мжmfw]?\s*$/i, "").replace(/\s+\d+\s*$/, "").trim();
       return { update_job: true, job: `${base} ${n}`.trim() };
     }
-    // М и Ж + ровно 2 строки, явно м и ж
     if (item.m && item.zh && lines.length === 2) {
       const g0 = guessGender(lines[0]);
       const g1 = guessGender(lines[1]);
@@ -312,10 +283,9 @@
         return { update_job: true, job: out.join("\n") };
       }
     }
-    // роли из заявки с явным полом/цифрой — точечно для известных кейсов
     if (item.roles && item.roles.length && lines.length) {
       let changed = false;
-      const out = lines.map((ln) => {
+      let out = lines.map((ln) => {
         const nl = norm(ln);
         for (const r of item.roles) {
           const key = norm(r.title).split(" ")[0];
@@ -327,14 +297,11 @@
         }
         return ln;
       });
-      // Переславль: убрать горничных если их нет в заявке
-      if (item.onlyRoles || (item.roles && item.roles.length)) {
-        const roleKeys = item.roles.map((r) => norm(r.title).split(" ")[0]).filter(Boolean);
-        if (roleKeys.length && !roleKeys.some((k) => k.startsWith("горнич"))) {
-          const filtered = out.filter((ln) => !/горнич/i.test(ln));
-          if (filtered.length !== out.length) {
-            return { update_job: true, job: filtered.join("\n") };
-          }
+      const roleKeys = item.roles.map((r) => norm(r.title).split(" ")[0]).filter(Boolean);
+      if (roleKeys.length && !roleKeys.some((k) => k.startsWith("горнич"))) {
+        const filtered = out.filter((ln) => !/горнич/i.test(ln));
+        if (filtered.length !== out.length) {
+          return { update_job: true, job: filtered.join("\n") };
         }
       }
       if (changed) return { update_job: true, job: out.join("\n") };
@@ -342,49 +309,42 @@
     return { update_job: false, job: row.job };
   }
 
+  function sameNeed(a, b) {
+    return String(a || "") === String(b || "");
+  }
+
   function buildPlan(customer, text, indexRows) {
     const parser = customerParsers[norm(customer)] || null;
-    const notes = [];
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат заказчика «${customer}» ещё не подключён. Сейчас работает: PersonalResourse.`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse).`],
         updates: [],
         ambiguous: [],
         missing: [],
         cleared: [],
+        clearedSuggested: [],
       };
     }
     const items = parser(text);
     if (!items.length) {
       return {
         ok: false,
-        notes: ["Не удалось разобрать ни одной строки заявки. Проверьте текст."],
+        notes: ["Не разобрала ни одной строки заявки."],
         updates: [],
         ambiguous: [],
         missing: [],
         cleared: [],
+        clearedSuggested: [],
       };
     }
 
     const { matched, ambiguous, missing, pool, used } = matchItems(items, indexRows, customer);
     const updates = [];
+    const notes = [];
 
     for (const { item, row } of matched) {
       const jobUpd = maybeUpdateJob(row, item);
-      let m = item.m;
-      let zh = item.zh;
-      let sp = item.sp;
-
-      // Дорохово-стиль: роли any (официант/повар) — подходят М и Ж; горничные уже в Ж
-      if (item.rolesAny && item.rolesAny.length) {
-        notes.push(
-          `ID ${row.id} (${oneLine(row.object)}): роли без пола (${item.rolesAny
-            .map((r) => r.count + " " + r.title)
-            .join(", ")}) — по правилу подходят и М, и Ж. В шапке: М=${m || "∅"} Ж=${zh || "∅"} (только явный пол из заявки).`
-        );
-      }
-
       updates.push({
         id: row.id,
         sheetRow: row.sheetRow,
@@ -393,9 +353,9 @@
         from_m: row.m,
         from_zh: row.zh,
         from_sp: row.sp,
-        m,
-        zh,
-        sp,
+        m: item.m,
+        zh: item.zh,
+        sp: item.sp,
         update_job: jobUpd.update_job,
         job: jobUpd.job,
         from_job: row.job,
@@ -403,60 +363,30 @@
       });
     }
 
-    // Снять потребность с объектов заказчика, которых нет в сегодняшней заявке
-    const cleared = [];
+    const clearedSuggested = [];
     for (const r of pool) {
       if (used.has(r.id)) continue;
-      const active = r.m || r.zh || r.sp;
-      if (!active) continue;
-      cleared.push({
+      if (!(r.m || r.zh || r.sp)) continue;
+      clearedSuggested.push({
         id: r.id,
-        sheetRow: r.sheetRow,
         object: r.object,
         from_m: r.m,
         from_zh: r.zh,
         from_sp: r.sp,
-        m: "",
-        zh: "",
-        sp: "",
-        update_job: false,
-        job: r.job,
-        clear: true,
       });
     }
 
-    for (const a of ambiguous) {
-      notes.push(
-        `Неоднозначно: «${a.item.place}» → ${a.candidates
-          .map((c) => `ID ${c.id} (${oneLine(c.object)}, score ${c.score})`)
-          .join("; ")}${a.note ? ". " + a.note : ""}`
-      );
-    }
-    for (const m of missing) {
-      notes.push(`Новая вакансия / нет в таблице: «${m.place}» → ${fmtNeed(m)}`);
-    }
-    for (const c of cleared) {
-      notes.push(
-        `В таблице есть потребность, в заявке нет: ID ${c.id} (${oneLine(c.object)}) было М=${c.from_m || "∅"} Ж=${c.from_zh || "∅"} СП=${c.from_sp || "∅"} — не снимаю автоматически, проверь.`
-      );
-    }
-
-    const ok = ambiguous.length === 0;
     return {
-      ok,
+      ok: true,
       customer,
       itemsCount: items.length,
       updates,
       ambiguous,
       missing,
-      cleared: [], // автоснятие отключено в v1 — только сигнал в notes
-      clearedSuggested: cleared,
+      cleared: [],
+      clearedSuggested,
       notes,
     };
-  }
-
-  function oneLine(s) {
-    return String(s || "").replace(/\s+/g, " ").trim();
   }
 
   function fmtNeed(x) {
@@ -465,27 +395,56 @@
     if (x.zh) bits.push(x.zh + "Ж");
     if (x.sp && x.sp !== "да") bits.push(x.sp + "СП");
     else if (x.sp === "да") bits.push("СП=да");
-    return bits.join(" / ") || "роли: " + (x.roles || []).map((r) => r.count + " " + r.title).join(", ");
+    if (bits.length) return bits.join("/");
+    if (x.roles && x.roles.length) return x.roles.map((r) => r.count + " " + r.title).join("+");
+    return "?";
   }
 
   function formatNotes(plan) {
-    const lines = [];
     if (!plan) return "";
-    if (plan.updates && plan.updates.length) {
-      lines.push("Обновления:");
-      for (const u of plan.updates) {
-        lines.push(
-          `• ID ${u.id} | ${oneLine(u.object)}\n  было: М=${u.from_m || "∅"} Ж=${u.from_zh || "∅"} СП=${u.from_sp || "∅"}\n  станет: М=${u.m || "∅"} Ж=${u.zh || "∅"} СП=${u.sp || "∅"}` +
-            (u.update_job ? `\n  должность: ${oneLine(u.from_job)} → ${oneLine(u.job)}` : "")
-        );
+    const lines = [];
+    const changed = (plan.updates || []).filter(
+      (u) =>
+        !sameNeed(u.from_m, u.m) ||
+        !sameNeed(u.from_zh, u.zh) ||
+        !sameNeed(u.from_sp, u.sp) ||
+        u.update_job
+    );
+
+    lines.push(
+      `Разбор: строк ${plan.itemsCount || 0}, обновить ${changed.length}, уточнить ${(plan.ambiguous || []).length}, новых ${(plan.missing || []).length}`
+    );
+
+    if (changed.length) {
+      lines.push("");
+      lines.push("Изменения:");
+      for (const u of changed) {
+        const from = [u.from_m || "0", u.from_zh || "0", u.from_sp || "—"].join("/");
+        const to = [u.m || "0", u.zh || "0", u.sp || "—"].join("/");
+        lines.push(`• ID ${u.id} ${shortObj(u.object)}: ${from} → ${to}`);
       }
     }
-    if (plan.notes && plan.notes.length) {
-      lines.push("");
-      lines.push("Вопросы / сигналы:");
-      plan.notes.forEach((n) => lines.push("• " + n));
+
+    const questions = [];
+    for (const a of plan.ambiguous || []) {
+      const ids = (a.candidates || []).map((c) => "ID " + c.id).join(" или ");
+      questions.push(`«${shortObj(a.item.place)}» — ${ids}? (${fmtNeed(a.item)})`);
     }
-    if (!lines.length) lines.push("Нет изменений.");
+    for (const m of plan.missing || []) {
+      questions.push(`Новый объект: «${shortObj(m.place)}» (${fmtNeed(m)})`);
+    }
+    for (const c of plan.clearedSuggested || []) {
+      questions.push(
+        `В заявке нет, в таблице есть: ID ${c.id} ${shortObj(c.object)} (${c.from_m || "0"}/${c.from_zh || "0"}/${c.from_sp || "—"})`
+      );
+    }
+    if (questions.length) {
+      lines.push("");
+      lines.push("Нужно решить:");
+      questions.forEach((q) => lines.push("• " + q));
+    }
+
+    if (!changed.length && !questions.length) lines.push("Изменений нет.");
     return lines.join("\n");
   }
 

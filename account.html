@@ -229,7 +229,7 @@
 
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=1"></script>
+  <script src="need-update.js?v=2"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -804,36 +804,40 @@
 
         const plan = CVZ_NEED.buildPlan(customer, text, updIndexRows);
         let report = CVZ_NEED.formatNotes(plan);
-        const hasIssues = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.notes && plan.notes.length);
-        updNotes.classList.toggle("has-issues", hasIssues);
+        const hasQuestions = !!(plan.ambiguous && plan.ambiguous.length) || !!(plan.missing && plan.missing.length) || !!(plan.clearedSuggested && plan.clearedSuggested.length);
+        updNotes.classList.toggle("has-issues", hasQuestions);
 
         const canWrite = window.CVZ_SHEETS_WRITE && CVZ_SHEETS_WRITE.hasSa() && updSheetsCfg && updSheetsCfg.spreadsheetId;
-        const rowsToWrite = (plan.updates || []).length + (plan.cleared || []).length;
+        // Пишем только однозначные обновления; вопросы — в отчёте, без блокировки всей пачки
+        const rowsToWrite = (plan.updates || []).filter((u) => {
+          const changed = String(u.from_m || "") !== String(u.m || "") || String(u.from_zh || "") !== String(u.zh || "") || String(u.from_sp || "") !== String(u.sp || "") || u.update_job;
+          return changed && u.sheetRow;
+        });
 
-        if (plan.ambiguous && plan.ambiguous.length) {
-          report = "Есть неоднозначные объекты — в таблицу НЕ писала. Разберите вопросы ниже.\n\n" + report;
+        if (!rowsToWrite.length && hasQuestions) {
           updNotes.value = report;
           return show("Нужны уточнения");
         }
 
-        if (!rowsToWrite) {
+        if (!rowsToWrite.length) {
           updNotes.value = report || "Нечего обновлять.";
-          return show(plan.missing && plan.missing.length ? "Только новые объекты" : "Нет изменений");
+          return show("Нет изменений");
         }
 
         if (!canWrite) {
           report =
-            "План готов. Запись в Sheet не выполнена: загрузите ключ SA в блоке ниже (и откройте сайт через github.io, не file://).\n\n" +
+            "План готов (запись в Sheet выключена — нет ключа SA или не github.io).\n\n" +
             report;
           updNotes.value = report;
           return show("План готов (без записи)");
         }
 
         try {
-          const res = await CVZ_SHEETS_WRITE.applyPlan(plan, updSheetsCfg);
-          report = "Готово. Записано ячеек: " + (res.updated || 0) + ".\n\n" + report;
+          const writePlan = { updates: rowsToWrite, cleared: [] };
+          const res = await CVZ_SHEETS_WRITE.applyPlan(writePlan, updSheetsCfg);
+          report = "Записано в таблицу: " + rowsToWrite.length + " строк (" + (res.updated || 0) + " ячеек).\n\n" + report;
           updNotes.value = report;
-          show("Готово");
+          show(hasQuestions ? "Записано, есть вопросы" : "Готово");
         } catch (err) {
           report = "Ошибка записи: " + (err.message || err) + "\n\n" + report;
           updNotes.value = report;
