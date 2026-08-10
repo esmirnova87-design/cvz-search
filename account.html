@@ -239,8 +239,8 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <script src="bitrix-config.js"></script>
   <script src="bitrix-api.js?v=phone2"></script>
-  <script src="need-update.js?v=11"></script>
-  <script src="need-ocr.js?v=2"></script>
+  <script src="need-update.js?v=12"></script>
+  <script src="need-ocr.js?v=3"></script>
   <script src="sheets-write.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
@@ -762,17 +762,22 @@
             show("Распознаю скрины…");
             updNotes.value = "Распознаю " + updImageDataUrls.length + " фото…\nПервый раз может занять минуту (скачивается словарь).";
             updNotes.classList.remove("has-issues");
-            const ocrText = await CVZ_NEED_OCR.recognizeImages(updImageDataUrls, (info) => {
-              if (info.phase === "preprocess") {
-                updNotes.value = "Готовлю фото " + info.index + " из " + info.total + "…";
-              } else if (info.phase === "image") {
-                updNotes.value = "Распознаю фото " + info.index + " из " + info.total + "…";
-              } else if (info.status === "loading language traineddata") {
-                updNotes.value = "Загружаю словарь OCR (один раз)…";
-              } else if (info.status === "recognizing text" && typeof info.progress === "number") {
-                updNotes.value = "Распознаю… " + Math.round(info.progress * 100) + "%";
-              }
-            });
+            const ocrMode = /нцз/i.test(customer) ? "table" : /яппи/i.test(customer) ? "tags" : "auto";
+            const ocrText = await CVZ_NEED_OCR.recognizeImages(
+              updImageDataUrls,
+              (info) => {
+                if (info.phase === "preprocess") {
+                  updNotes.value = "Готовлю фото " + info.index + " из " + info.total + "…";
+                } else if (info.phase === "image") {
+                  updNotes.value = "Распознаю фото " + info.index + " из " + info.total + "…";
+                } else if (info.status === "loading language traineddata") {
+                  updNotes.value = "Загружаю словарь OCR (один раз)…";
+                } else if (info.status === "recognizing text" && typeof info.progress === "number") {
+                  updNotes.value = "Распознаю… " + Math.round(info.progress * 100) + "%";
+                }
+              },
+              { mode: ocrMode }
+            );
             text = String(ocrText || "").trim();
             if (!text) {
               updNotes.value = "Не удалось распознать текст на скринах. Попробуйте более чёткий снимок или вставьте текст.";

@@ -513,7 +513,105 @@
         rateHint: rateCell,
       });
     }
-    return items;
+    if (items.length) return items;
+    return parseNczLoose(raw);
+  }
+
+  /**
+   * OCR-картинка таблицы НЦЗ: ищем пары «число … М|Ж» и объект слева.
+   */
+  function parseNczLoose(text) {
+    const raw = String(text || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!raw) return [];
+
+    const items = [];
+    // токены: слова и отдельно М/Ж
+    const tokens = raw.split(" ").filter(Boolean);
+    const isJob = (t) =>
+      /упаков|грузчик|сборщик|уборщ|горнич|маркир|комплект|разнораб|мойщик|фасов|корен|стикер|посуд|оператор/i.test(
+        t
+      );
+    const isLoc = (t) =>
+      /район|р-н|область|москва|ступино|бронниц|истр|внуков|серпухов|электростал|наро|пушкин|гороховец|дегунино|нижегород|рокос|люберц|сергиев/i.test(
+        t
+      );
+    const isNoise = (t) =>
+      /^(от|рф|рб|нет|да|нужна|нужен|общежитие|квартира|фикс|сделка|размер|сканер|смена|смен)$/i.test(t) ||
+      /^\d{4,}$/.test(t);
+
+    for (let i = 0; i < tokens.length; i++) {
+      const g = /^[мm]$/i.test(tokens[i]) ? "m" : /^[жf]$/i.test(tokens[i]) ? "zh" : "";
+      if (!g) continue;
+
+      // ближайшее число слева (потребность), не «От 35» — берём первое 1–40 в окне
+      let n = 0;
+      let nAt = -1;
+      for (let j = i - 1; j >= Math.max(0, i - 12); j--) {
+        if (!/^\d{1,2}$/.test(tokens[j])) continue;
+        const v = parseInt(tokens[j], 10);
+        if (v < 1 || v > 40) continue;
+        // «От 35/15» — срок вахты: если предыдущий токен «От»
+        if (j > 0 && /^от$/i.test(tokens[j - 1])) continue;
+        n = v;
+        nAt = j;
+        break;
+      }
+      if (!n) continue;
+
+      // объект: кусок текста левее числа
+      const left = tokens.slice(Math.max(0, nAt - 14), nAt).filter((t) => !isNoise(t) && !/^\d+$/.test(t));
+      // убрать хвостики должностей справа от объекта в этом окне
+      let objToks = [];
+      for (let k = 0; k < left.length; k++) {
+        if (isJob(left[k])) break;
+        objToks.push(left[k]);
+      }
+      // если пусто — взять любые не-шумные
+      if (objToks.length < 2) objToks = left.slice(-6);
+      const object = objToks.join(" ").replace(/^\d+\s*/, "").trim();
+      if (object.length < 5) continue;
+      if (/потребност|территориал|гражданств|должност/i.test(object)) continue;
+
+      let loc = "";
+      const right = tokens.slice(i + 1, i + 10);
+      const locHit = right.find(isLoc) || left.find(isLoc);
+      if (locHit) loc = locHit;
+      const vacancy = right.find(isJob) || left.find(isJob) || "";
+
+      const counts = { m: 0, zh: 0, sp: 0, hasM: false, hasZh: false, hasSp: false, roles: [] };
+      if (g === "m") {
+        counts.m = n;
+        counts.hasM = true;
+      } else {
+        counts.zh = n;
+        counts.hasZh = true;
+      }
+      if (vacancy) counts.roles.push({ count: n, title: vacancy, gender: g });
+      const need = finalizeSp(counts);
+      const place = loc ? object + ", " + loc : object;
+      items.push({
+        raw: object + " " + n + (g === "m" ? "М" : "Ж"),
+        place,
+        project: object,
+        vacancy: vacancy,
+        location: loc,
+        ...need,
+        roles: counts.roles,
+      });
+    }
+
+    // дедуп одинаковых сырых
+    const seen = new Set();
+    return items.filter((it) => {
+      const k = it.raw + "|" + it.m + "|" + it.zh;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   }
 
   function numNeed(v) {
