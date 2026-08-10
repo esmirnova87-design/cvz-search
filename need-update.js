@@ -921,7 +921,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1109,10 +1109,96 @@
     return lines.join("\n");
   }
 
+  /**
+   * ЭкоСтафф: Telegram-список
+   * `- ТЛК ДОМОДЕДОВО (АВТОЗАПЧАСТИ): 32 МУЖ`
+   * `СИПИСИ: 2 ЖЕН/ 3 МУЖ`
+   * Допись: `+ к потребности` + `Объект Сиписи` + `1 семейная пара` → склеится на тот же ID.
+   */
+  function parseEcoStaff(text) {
+    const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+    const items = [];
+    let lastPlace = "";
+    let addMode = false;
+
+    function normalizeNeed(s) {
+      return String(s || "")
+        .replace(/[🔥🆘⬇️❗️❗]/g, " ")
+        .replace(/муж(?:чин[аы]?|ины)?/gi, "М")
+        .replace(/жен(?:щин[аы]?|ины)?/gi, "Ж")
+        .replace(/семейн\w*\s*пар[аы]?/gi, "семейных")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function pushPlace(place, needRaw) {
+      const p = String(place || "")
+        .replace(/^[-•*]\s*/, "")
+        .replace(/^объект\s+/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!p || p.length < 3) return;
+      if (/потребность\s+на|к\s+потребности/i.test(p)) return;
+      const counts = parseCountBlock(normalizeNeed(needRaw));
+      if (!counts.hasM && !counts.hasZh && !counts.hasSp && !counts.roles.length) return;
+      const need = finalizeSp(counts);
+      lastPlace = p;
+      items.push({
+        raw: p + ": " + needRaw,
+        place: p,
+        project: p,
+        vacancy: "",
+        ...need,
+        roles: counts.roles || [],
+      });
+    }
+
+    for (const line0 of lines) {
+      const line = line0.replace(/[🔥🆘]/g, " ").trim();
+      if (!line) continue;
+      if (/\+\s*к\s*потребност/i.test(line)) {
+        addMode = true;
+        continue;
+      }
+      if (/потребность\s+на\s+\d/i.test(line)) continue;
+
+      // «Объект Сиписи» / «1 семейная пара»
+      const objOnly = line.match(/^объект\s+(.+)$/i);
+      if (objOnly) {
+        lastPlace = objOnly[1].replace(/\s+/g, " ").trim();
+        continue;
+      }
+
+      const colon = line.match(/^[-•*]?\s*(.+?)\s*:\s*(.+)$/);
+      if (colon) {
+        pushPlace(colon[1], colon[2]);
+        continue;
+      }
+
+      // строка только с цифрами/семьями после «Объект …»
+      if (lastPlace && (/^\d+\s*(?:муж|жен|м|ж|семейн)/i.test(line) || /\d+\s*семейн/i.test(line))) {
+        pushPlace(lastPlace, line);
+        continue;
+      }
+
+      // OCR: «ТЛК ЧЕХОВ 45 МУЖ» без двоеточия
+      const bare = line.match(
+        /^[-•*]?\s*(.+?)\s+(\d+\s*(?:муж|жен|м|ж)\b.*)$/i
+      );
+      if (bare && bare[1].length >= 3) {
+        pushPlace(bare[1], bare[2]);
+      }
+    }
+
+    void addMode;
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
     нцз: parseNcz,
+    экостафф: parseEcoStaff,
   };
 
   global.CVZ_NEED = {
@@ -1121,6 +1207,7 @@
     parsePersonalResourse,
     parseYappi,
     parseNcz,
+    parseEcoStaff,
     setAliases,
     norm,
   };
