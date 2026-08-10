@@ -580,8 +580,9 @@
         <p class="muted">Выберите заказчика, вставьте заявку → «Обновить». Пишутся М / Ж / СП. Неоднозначности и новые объекты — в блоке ниже.</p>
         <p class="note">[заметки: сейчас подключен разбор PersonalResourse; скриншот — превью, OCR позже; запись в Sheet — после загрузки ключа SA один раз в браузере]</p>
         <div class="field">
-          <label class="lbl" for="updCustomer">Заказчик</label>
-          <select id="updCustomer">
+          <label class="lbl" for="updCustomerSearch">Заказчик</label>
+          <input id="updCustomerSearch" type="search" placeholder="Начните вводить название…" autocomplete="off" />
+          <select id="updCustomer" style="margin-top:8px">
             <option value="">— выберите заказчика —</option>
           </select>
         </div>
@@ -623,7 +624,9 @@
       let updImageDataUrl = "";
       let updIndexRows = [];
       let updSheetsCfg = null;
+      let updCustomerList = CUSTOMERS_FALLBACK.slice();
       const updCustomer = document.getElementById("updCustomer");
+      const updCustomerSearch = document.getElementById("updCustomerSearch");
       const updBlob = document.getElementById("updBlob");
       const updDrop = document.getElementById("updDrop");
       const updFile = document.getElementById("updFile");
@@ -631,23 +634,33 @@
       const updPreviewImg = document.getElementById("updPreviewImg");
       const updNotes = document.getElementById("updNotes");
 
-      function fillCustomers(list) {
+      function fillCustomers(list, filterText) {
+        updCustomerList = (list && list.length) ? list.slice() : updCustomerList;
+        const q = String(filterText || "").trim().toLowerCase();
         const cur = updCustomer.value;
+        const filtered = q
+          ? updCustomerList.filter((name) => String(name).toLowerCase().includes(q))
+          : updCustomerList.slice();
         updCustomer.innerHTML = `<option value="">— выберите заказчика —</option>`;
-        (list || []).forEach((name) => {
+        filtered.forEach((name) => {
           const opt = document.createElement("option");
           opt.value = name;
           opt.textContent = name;
           updCustomer.append(opt);
         });
-        if (cur && list.includes(cur)) updCustomer.value = cur;
+        if (cur && filtered.includes(cur)) updCustomer.value = cur;
+        else if (filtered.length === 1) updCustomer.value = filtered[0];
       }
       fillCustomers(CUSTOMERS_FALLBACK);
+      updCustomerSearch.addEventListener("input", () => fillCustomers(updCustomerList, updCustomerSearch.value));
+      updCustomer.addEventListener("change", () => {
+        if (updCustomer.value) updCustomerSearch.value = updCustomer.value;
+      });
       fetch("customers.json?t=" + Date.now())
         .then((r) => (r.ok ? r.json() : Promise.reject()))
         .then((d) => {
           const list = Array.isArray(d) ? d : (d.customers || d.items || []);
-          if (list.length) fillCustomers(list.map(String).filter(Boolean));
+          if (list.length) fillCustomers(list.map(String).filter(Boolean), updCustomerSearch.value);
         })
         .catch(() => {});
 
@@ -736,6 +749,8 @@
       document.getElementById("updClearImg").onclick = () => setUpdImage("");
       document.getElementById("updClear").onclick = () => {
         updCustomer.value = "";
+        updCustomerSearch.value = "";
+        fillCustomers(updCustomerList, "");
         updBlob.value = "";
         setUpdImage("");
         updNotes.value = "";
