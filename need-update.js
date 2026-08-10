@@ -921,7 +921,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1194,11 +1194,108 @@
     return items;
   }
 
+  /**
+   * ProClever: блоки 🔷 объект + 📍 город + строки NМ / NЖ
+   */
+  function parseProClever(text) {
+    const lines = String(text || "")
+      .replace(/\r\n/g, "\n")
+      .split("\n");
+    const items = [];
+    let title = "";
+    let loc = "";
+    let vacancy = "";
+    let m = 0;
+    let zh = 0;
+    let sp = 0;
+    let hasM = false;
+    let hasZh = false;
+    let hasSp = false;
+    let roles = [];
+
+    function reset() {
+      title = "";
+      loc = "";
+      vacancy = "";
+      m = 0;
+      zh = 0;
+      sp = 0;
+      hasM = false;
+      hasZh = false;
+      hasSp = false;
+      roles = [];
+    }
+
+    function flush() {
+      if (!title || (!hasM && !hasZh && !hasSp)) {
+        reset();
+        return;
+      }
+      const need = finalizeSp({ m, zh, sp, hasM, hasZh, hasSp, roles });
+      const place = loc ? title + ", " + loc : title;
+      items.push({
+        raw: place + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place,
+        project: title,
+        vacancy,
+        location: loc,
+        ...need,
+        roles,
+      });
+      reset();
+    }
+
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/рекрутер|партнер|доброе\s+утро|заявка\s+на/i.test(line)) continue;
+      if (/^(москва|санкт-петербург|питер)\s*$/i.test(line)) continue;
+      if (/^https?:\/\//i.test(line)) continue;
+      if (/^[👉🍽]/.test(line)) continue;
+      if (/питани|вахта|фикс|сделка/i.test(line) && !/\d+\s*[мжМЖ]/i.test(line)) continue;
+
+      if (/🔷|◆/.test(line)) {
+        flush();
+        title = line.replace(/[🔷◆]/g, "").replace(/\s+/g, " ").trim();
+        continue;
+      }
+      if (/📍/.test(line)) {
+        loc = line.replace(/📍/g, "").replace(/\s+/g, " ").trim();
+        continue;
+      }
+      if (/✔️|✅/.test(line)) {
+        vacancy = line.replace(/[✔️✅]/g, "").replace(/\s+/g, " ").trim();
+        continue;
+      }
+
+      if (/\d+\s*[мжМЖmfw]/i.test(line) || /\d+\s*семейн/i.test(line)) {
+        const cleaned = line.replace(/[^\d\sмжМЖmfwсемейнпар.+/\\-]/gi, " ");
+        const c = parseCountBlock(cleaned);
+        if (c.hasM) {
+          m += c.m;
+          hasM = true;
+        }
+        if (c.hasZh) {
+          zh += c.zh;
+          hasZh = true;
+        }
+        if (c.hasSp) {
+          sp += c.sp;
+          hasSp = true;
+        }
+        roles = roles.concat(c.roles || []);
+      }
+    }
+    flush();
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
     нцз: parseNcz,
     экостафф: parseEcoStaff,
+    proclever: parseProClever,
   };
 
   global.CVZ_NEED = {
@@ -1208,6 +1305,7 @@
     parseYappi,
     parseNcz,
     parseEcoStaff,
+    parseProClever,
     setAliases,
     norm,
   };
