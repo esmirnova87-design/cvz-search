@@ -1274,9 +1274,8 @@
       if (/рекрутер|партнер|доброе\s+утро|заявка\s+на/i.test(line)) continue;
       if (/^(москва|санкт-петербург|питер)\s*$/i.test(line)) continue;
       if (/^https?:\/\//i.test(line)) continue;
-      if (/^[👉🍽]/.test(line)) continue;
-      if (/питани|вахта|фикс|сделка/i.test(line) && !/\d+\s*[мжМЖ]/i.test(line)) continue;
 
+      // Сначала структура блока — иначе «СКЛАД продуктов питания» отсекается по слову «питани»
       if (/🔷|◆/.test(line)) {
         flush();
         title = line.replace(/[🔷◆]/g, "").replace(/\s+/g, " ").trim();
@@ -1290,6 +1289,9 @@
         vacancy = line.replace(/[✔️✅]/g, "").replace(/\s+/g, " ").trim();
         continue;
       }
+
+      if (/^[👉🍽❗️]/.test(line)) continue;
+      if (/питани|вахта|фикс|сделка/i.test(line) && !/\d+\s*[мжМЖmfw]/i.test(line)) continue;
 
       if (/\d+\s*[мжМЖmfw]/i.test(line) || /\d+\s*семейн/i.test(line)) {
         const cleaned = line.replace(/[^\d\sмжМЖmfwсемейнпар.+/\\-]/gi, " ");
