@@ -944,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1700,6 +1700,83 @@
     return items;
   }
 
+  /**
+   * КНК: Excel «Таблица» — колонки городов, потребность в 1–2 строках (М / Ж).
+   * Вставка на сайт: TSV Город | Вакансия | Потребность (10М/5Ж).
+   * «по согласованию» не считаем потребностью.
+   */
+  function parseKnk(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n");
+    const lines = raw.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim());
+    const items = [];
+    let header = null;
+
+    function splitCols(line) {
+      if (line.includes("\t")) return line.split("\t").map((c) => c.replace(/\s+/g, " ").trim());
+      return line.split(/\s{2,}|\s*\|\s*/).map((c) => c.replace(/\s+/g, " ").trim()).filter(Boolean);
+    }
+
+    function parseNeed(cell, vacancy) {
+      const t = String(cell || "").trim();
+      if (!t || /^0+$/.test(t) || /согласован/i.test(t)) {
+        return finalizeSp({ m: 0, zh: 0, sp: 0, hasM: false, hasZh: false, hasSp: false, roles: [] });
+      }
+      let s = t
+        .replace(/мужчин\w*/gi, "М")
+        .replace(/женщин\w*/gi, "Ж")
+        .replace(/муж\b/gi, "М")
+        .replace(/жен\b/gi, "Ж");
+      if (/^\d+$/.test(s.replace(/\s/g, ""))) {
+        const n = parseInt(s, 10);
+        const vac = norm(vacancy || "");
+        if (/упаковщиц|уборщиц|фасов|маркиров/.test(vac) && !/грузчик|разнораб|комплект/.test(vac)) {
+          return finalizeSp({ m: 0, zh: n, sp: 0, hasM: false, hasZh: true, hasSp: false, roles: [] });
+        }
+        return finalizeSp({ m: n, zh: 0, sp: 0, hasM: true, hasZh: false, hasSp: false, roles: [] });
+      }
+      const c = parseCountBlock(s.replace(/\//g, " "));
+      return finalizeSp(c);
+    }
+
+    for (const line of lines) {
+      const cols = splitCols(line);
+      if (!cols.length) continue;
+      const njoin = norm(cols.join(" "));
+      if (!header && /город|объект|проект/.test(njoin) && /потребност|вакан/.test(njoin)) {
+        header = cols.map((c) => norm(c));
+        continue;
+      }
+      let city = "";
+      let vacancy = "";
+      let needCell = "";
+      if (header) {
+        const ic = colIdx(header, ["город", "объект", "проект"]);
+        const iv = colIdx(header, ["вакан", "должност"]);
+        const ineed = colIdx(header, ["потребност"]);
+        city = ic >= 0 ? cols[ic] || "" : cols[0] || "";
+        vacancy = iv >= 0 ? cols[iv] || "" : "";
+        needCell = ineed >= 0 ? cols[ineed] || "" : cols[cols.length - 1] || "";
+      } else {
+        city = cols[0] || "";
+        vacancy = cols[1] || "";
+        needCell = cols[2] || cols[1] || "";
+      }
+      if (!city || /город|проект/.test(norm(city))) continue;
+      const need = parseNeed(needCell, vacancy);
+      if (!need.m && !need.zh) continue;
+      items.push({
+        raw: city + " | " + needCell,
+        place: city + (vacancy ? ", " + vacancy : ""),
+        project: city,
+        vacancy: String(vacancy || "").replace(/\s+/g, " ").trim(),
+        location: city,
+        ...need,
+        roles: [],
+      });
+    }
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -1710,6 +1787,7 @@
     limestaff: parseLimeStaff,
     lerteco: parseLerteco,
     ххелпер: parseXxHelper,
+    кнк: parseKnk,
   };
 
   global.CVZ_NEED = {
@@ -1723,6 +1801,7 @@
     parseLimeStaff,
     parseLerteco,
     parseXxHelper,
+    parseKnk,
     setAliases,
     norm,
   };
