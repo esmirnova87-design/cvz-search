@@ -944,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК, GST GSR Фортренд).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1793,6 +1793,161 @@
     return items;
   }
 
+  /**
+   * GST GSR Фортренд: блоки 📌 объект + буллеты с NМ/NЖ / «от 10Ж» / «10м/день».
+   * Строки про оплату/вахту/питание — игнор.
+   */
+  function parseGsr(text) {
+    const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+    const items = [];
+    let title = "";
+    let loc = "";
+    let m = 0;
+    let zh = 0;
+    let sp = 0;
+    let hasM = false;
+    let hasZh = false;
+    let hasSp = false;
+    let roles = [];
+    let vacancy = "";
+
+    function reset() {
+      title = "";
+      loc = "";
+      m = 0;
+      zh = 0;
+      sp = 0;
+      hasM = false;
+      hasZh = false;
+      hasSp = false;
+      roles = [];
+      vacancy = "";
+    }
+
+    function flush() {
+      if ((!title && !loc) || (!hasM && !hasZh && !hasSp)) {
+        reset();
+        return;
+      }
+      const need = finalizeSp({ m, zh, sp, hasM, hasZh, hasSp, roles });
+      const place = title && loc ? title + ", " + loc : title || loc;
+      items.push({
+        raw: place + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place,
+        project: title,
+        vacancy,
+        location: loc,
+        ...need,
+        roles,
+      });
+      reset();
+    }
+
+    function addFromLine(line) {
+      let t = String(line || "")
+        .replace(/^[-–—•*📌]\s*/, "")
+        .replace(/требуются\s*/gi, " ")
+        .replace(/от\s+(\d+)/gi, "$1")
+        .replace(/(\d+)\s*м\s*\/\s*день/gi, "$1М")
+        .replace(/(\d+)\s*м\s*\/\s*ночь/gi, "$1М")
+        .replace(/(\d+)\s*м\\?\s*\/\s*ж/gi, "$1М/$1Ж")
+        .replace(/(\d+)\s*м\s*\\?\s*ж/gi, "$1М/$1Ж")
+        .replace(/мужчин[аы]?\b/gi, "М")
+        .replace(/женщин[аы]?\b/gi, "Ж")
+        .replace(/человек\b/gi, "М")
+        .replace(/\//g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!t) return false;
+      if (
+        /оплат|ставк|фикс|руб|вахта|питани|прожива|график|вычет|смен\b|час\b/i.test(t) &&
+        !/\d+\s*[мжМЖ]/i.test(t)
+      )
+        return false;
+      const c = parseCountBlock(t);
+      if (!c.hasM && !c.hasZh && !c.hasSp) return false;
+      if (c.hasM) {
+        m += c.m;
+        hasM = true;
+      }
+      if (c.hasZh) {
+        zh += c.zh;
+        hasZh = true;
+      }
+      if (c.hasSp) {
+        sp += c.sp;
+        hasSp = true;
+      }
+      roles = roles.concat(c.roles || []);
+      if (/сборщик|комплектов|грузчик|упаков|водитель|погруз|штабел|разнораб/i.test(t)) {
+        const rm = t.match(
+          /(сборщик\w*|комплектовщик\w*|грузчик\w*|упаковщик\w*|водитель\w*|погрузчик\w*|штабелер\w*|разнорабоч\w*)/i
+        );
+        if (rm) vacancy = vacancy || rm[1];
+      }
+      return true;
+    }
+
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/^https?:\/\//i.test(line)) continue;
+      if (/^⚡️|^🔥\s*запуск|^‼️|^❗️\s*строго/i.test(line) && !/📌/.test(line)) {
+        if (/усть[-\s]?луг|нпец/i.test(line)) {
+          flush();
+          title = "НПЕЦ";
+          loc = "Усть-Луга";
+        }
+        continue;
+      }
+      if (/^усть[-\s]?луг/i.test(line) && !title) {
+        title = title || "НПЕЦ";
+        loc = line.split(",")[0].trim();
+        continue;
+      }
+      if (/требуются\s+разнорабоч/i.test(line) || /разнорабочие\s*:\s*\d+/i.test(line)) {
+        addFromLine(line.replace(/требуются\s+/i, ""));
+        continue;
+      }
+
+      if (
+        /📌/.test(line) ||
+        (/^[🔥\s]*[А-ЯA-Z]/.test(line) &&
+          /чай|черноголов|электрон|роквул|инструмент|яблок|спортмастер|логик|сберлог|хлебозавод|аромат|нпец/i.test(
+            line
+          ) &&
+          line.length > 12 &&
+          !/^•/.test(line))
+      ) {
+        flush();
+        const clean = line.replace(/📌/g, "").replace(/🔥/g, " ").replace(/\s+/g, " ").trim();
+        title = clean.split("(")[0].trim() || clean;
+        const city = clean.match(/\(([^)]+)\)/);
+        loc = city ? city[1].replace(/^общ\.?/i, "").trim() : "";
+        if (
+          !loc &&
+          /фрязин|черноголов|усадков|железнодорож|чашников|истра|химк|руз|одинцов|котельник|луг/i.test(
+            clean
+          )
+        ) {
+          loc = clean;
+        }
+        continue;
+      }
+
+      if (/^🏠/.test(line)) continue;
+      if (/^•|^-\s|упаковщик|водитель|комплектов|грузчик|сборщик|работник\s+линии/i.test(line)) {
+        addFromLine(line);
+        continue;
+      }
+      if (/\d+\s*[мжМЖmfw]/i.test(line) || /\d+\s*(муж|жен|человек)/i.test(line)) {
+        addFromLine(line);
+      }
+    }
+    flush();
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -1804,6 +1959,10 @@
     lerteco: parseLerteco,
     ххелпер: parseXxHelper,
     кнк: parseKnk,
+    "gst gsr фортренд": parseGsr,
+    gsr: parseGsr,
+    gst: parseGsr,
+    фортренд: parseGsr,
   };
 
   global.CVZ_NEED = {
@@ -1818,6 +1977,7 @@
     parseLerteco,
     parseXxHelper,
     parseKnk,
+    parseGsr,
     setAliases,
     norm,
   };
