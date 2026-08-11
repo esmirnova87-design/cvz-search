@@ -1278,9 +1278,9 @@
       if (/^https?:\/\//i.test(line)) continue;
 
       // Сначала структура блока — иначе «СКЛАД продуктов питания» отсекается по слову «питани»
-      if (/🔷|◆/.test(line)) {
+      if (/[🔷🔹◆◇♦]/u.test(line)) {
         flush();
-        title = line.replace(/[🔷◆]/g, "").replace(/\s+/g, " ").trim();
+        title = line.replace(/[🔷🔹◆◇♦]/gu, "").replace(/\s+/g, " ").trim();
         continue;
       }
       if (/📍/.test(line)) {
