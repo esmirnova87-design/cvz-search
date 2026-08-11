@@ -944,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1551,6 +1551,155 @@
     return items.filter((it) => !it.zeroNeed);
   }
 
+  /**
+   * ХХЕЛПЕР: блоки «🍟 НАЗВАНИЕ» + 📍 город + 👥/👫 Потребность/Требуются NМ/NЖ/семейные.
+   * Москва и Регионы в одной вставке — оба блока.
+   * РУССКАРТ Яхрома и Мытищи → один ID в Sheet (сумма).
+   */
+  function parseXxHelper(text) {
+    const lines = String(text || "")
+      .replace(/\r\n/g, "\n")
+      .split("\n");
+    const items = [];
+    let title = "";
+    let loc = "";
+    let vacancy = "";
+    let m = 0;
+    let zh = 0;
+    let sp = 0;
+    let hasM = false;
+    let hasZh = false;
+    let hasSp = false;
+    let roles = [];
+    let waitingNeed = false;
+
+    const META =
+      /^(📍|👥|👫|🎂|⏳|💰|🍲|🏠|👷|☀️|🏭|📦|🛡|✅|🔥|⏰)/u;
+
+    function reset() {
+      title = "";
+      loc = "";
+      vacancy = "";
+      m = 0;
+      zh = 0;
+      sp = 0;
+      hasM = false;
+      hasZh = false;
+      hasSp = false;
+      roles = [];
+      waitingNeed = false;
+    }
+
+    function flush() {
+      if ((!title && !loc) || (!hasM && !hasZh && !hasSp)) {
+        reset();
+        return;
+      }
+      const need = finalizeSp({ m, zh, sp, hasM, hasZh, hasSp, roles });
+      const place = title && loc ? title + ", " + loc : title || loc;
+      items.push({
+        raw: place + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place,
+        project: title,
+        vacancy,
+        location: loc,
+        ...need,
+        roles,
+      });
+      reset();
+    }
+
+    function addCounts(raw) {
+      let s = String(raw || "")
+        .replace(/потребность\s*:?/gi, " ")
+        .replace(/требуются\s*:?/gi, " ")
+        .replace(/мужчин\w*/gi, "М")
+        .replace(/женщин\w*/gi, "Ж")
+        .replace(/семейн\w*\s*пар[аы]?/gi, "семейных")
+        .replace(/\//g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!s) return false;
+      const c = parseCountBlock(s);
+      if (!c.hasM && !c.hasZh && !c.hasSp) return false;
+      if (c.hasM) {
+        m += c.m;
+        hasM = true;
+      }
+      if (c.hasZh) {
+        zh += c.zh;
+        hasZh = true;
+      }
+      if (c.hasSp) {
+        sp += c.sp;
+        hasSp = true;
+      }
+      roles = roles.concat(c.roles || []);
+      return true;
+    }
+
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/^https?:\/\//i.test(line)) continue;
+      if (/хелпер|партнер/i.test(line) && line.length < 40) continue;
+      if (/^заявка\s+(москва|регион)/i.test(line.replace(/🔥/g, "").trim())) continue;
+      if (/^🔥/.test(line) && /заявка/i.test(line)) continue;
+
+      // объект: эмодзи + название (не мета-строка)
+      if (/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(line) && !META.test(line)) {
+        const name = line
+          .replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D]+/u, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (name && /[а-яёa-z]/i.test(name)) {
+          flush();
+          title = name;
+          continue;
+        }
+      }
+
+      if (/^📍/.test(line)) {
+        loc = line.replace(/^📍/u, "").replace(/\s+/g, " ").trim();
+        continue;
+      }
+      if (/^👷/.test(line) || /должность\s*:/i.test(line)) {
+        vacancy = line
+          .replace(/^👷/u, "")
+          .replace(/должность\s*:?/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        continue;
+      }
+
+      if (/^(🎂|⏳|💰|🍲|🏠|☀️|🏭|📦|🛡|✅)/u.test(line)) continue;
+      if (/оплата|питание|проживание|возраст|вахта|судим/i.test(line) && !/\d+\s*[мжМЖ]/i.test(line) && !/семейн/i.test(line))
+        continue;
+
+      if (/потребность|требуются/i.test(line)) {
+        const after = line.replace(/^.*?потребность\s*:?/i, "").replace(/^.*?требуются\s*:?/i, "").trim();
+        if (after && addCounts(after)) {
+          waitingNeed = false;
+        } else {
+          waitingNeed = true;
+        }
+        continue;
+      }
+
+      if (waitingNeed || /^(👥|👫)/u.test(line)) {
+        const body = line.replace(/^(👥|👫)/u, "").trim();
+        if (addCounts(body)) waitingNeed = false;
+        continue;
+      }
+
+      if (/\d+\s*[мжМЖmfw]/i.test(line) || /\d+\s*семейн/i.test(line) || /\d+\s*муж/i.test(line)) {
+        addCounts(line);
+      }
+    }
+    flush();
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -1560,6 +1709,7 @@
     "lime staff": parseLimeStaff,
     limestaff: parseLimeStaff,
     lerteco: parseLerteco,
+    ххелпер: parseXxHelper,
   };
 
   global.CVZ_NEED = {
@@ -1572,6 +1722,7 @@
     parseProClever,
     parseLimeStaff,
     parseLerteco,
+    parseXxHelper,
     setAliases,
     norm,
   };
