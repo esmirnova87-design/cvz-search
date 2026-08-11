@@ -944,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК, GST GSR Фортренд).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК, GST GSR Фортренд, Табия).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1948,6 +1948,132 @@
     return items;
   }
 
+  /**
+   * Табия: Google Sheet «Вакансии» — колонки ОБЪЕКТ + ВАКАНСИИ И ПОТРЕБНОСТЬ.
+   * Вставка: TSV (копипаст из Sheet) или строки «Объект | Роль - N М».
+   * «Роль - 0» игнор; скобки про график (1м/2м) — не отдельные люди.
+   */
+  function parseTabia(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n");
+    const lines = raw.split("\n");
+    const items = [];
+
+    function parseVacCell(cell) {
+      let t = String(cell || "").replace(
+        /\([^)]*(?:график|смен|день|ночь|одна|вторая|ожида)[^)]*\)/gi,
+        " "
+      );
+      let m = 0;
+      let zh = 0;
+      let hasM = false;
+      let hasZh = false;
+      const roles = [];
+      const parts = t.split(/[\n;]+/);
+      for (let part of parts) {
+        part = part.trim();
+        if (!part || /^!/.test(part)) continue;
+        const hit = part.match(/^(.+?)\s*[-–—]\s*(\d+)\s*([МMЖFмmжf])\b/);
+        if (!hit) continue;
+        const n = parseInt(hit[2], 10);
+        if (!n) continue;
+        const g = hit[3].toUpperCase().replace("F", "Ж").replace("M", "М");
+        const role = hit[1].trim();
+        if (g === "М") {
+          m += n;
+          hasM = true;
+          roles.push({ count: n, title: role, gender: "m" });
+        } else {
+          zh += n;
+          hasZh = true;
+          roles.push({ count: n, title: role, gender: "zh" });
+        }
+      }
+      return finalizeSp({ m, zh, sp: 0, hasM, hasZh, hasSp: false, roles });
+    }
+
+    function pushItem(obj, vac) {
+      const place = String(obj || "").replace(/\s+/g, " ").trim();
+      if (!place || /объект|адрес офиса|запись в офис/i.test(place)) return;
+      const need = parseVacCell(vac);
+      if (!need.m && !need.zh) {
+        // нули тоже полезны для очистки — пушим с has, если в vac были роли с 0
+        if (!/-\s*0\b/.test(String(vac || ""))) return;
+        items.push({
+          raw: place + " 0",
+          place,
+          project: place.split(/[,|\n]/)[0].trim(),
+          vacancy: "",
+          location: place,
+          m: "",
+          zh: "",
+          sp: "",
+          roles: [],
+        });
+        return;
+      }
+      items.push({
+        raw: place + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place,
+        project: place.split(/[,|\n]/)[0].trim(),
+        vacancy: "",
+        location: place,
+        ...need,
+        roles: [],
+      });
+    }
+
+    // TSV rows
+    let sawTsv = false;
+    for (const line of lines) {
+      if (!line.includes("\t")) continue;
+      const cols = line.split("\t").map((c) => c.trim());
+      if (cols.length < 2) continue;
+      const njoin = norm(cols.join(" "));
+      if (/объект/.test(njoin) && /вакан|потребност/.test(njoin)) {
+        sawTsv = true;
+        continue;
+      }
+      // A=№ B=объект C=вакансии OR A=объект B=вакансии
+      let obj = "";
+      let vac = "";
+      if (/^\d+$/.test(cols[0]) && cols.length >= 3) {
+        obj = cols[1];
+        vac = cols[2];
+      } else {
+        obj = cols[0];
+        vac = cols[1];
+      }
+      if (/^https?:\/\//i.test(obj) || /запись в офис/i.test(obj)) continue;
+      pushItem(obj, vac);
+      sawTsv = true;
+    }
+    if (sawTsv && items.length) return items;
+
+    // fallback: blocks «ОБЪЕКТ» then lines Role - N
+    let curObj = "";
+    let vacBuf = [];
+    function flush() {
+      if (!curObj) return;
+      pushItem(curObj, vacBuf.join("\n"));
+      vacBuf = [];
+    }
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/^https?:\/\//i.test(line) || /запись в офис/i.test(line)) continue;
+      if (/[-–—]\s*\d+\s*[МMЖFмmжf]\b/.test(line)) {
+        vacBuf.push(line);
+        continue;
+      }
+      if (/[А-ЯA-Z]{3,}/.test(line) && !/руб|смен|граждан|возраст/i.test(line)) {
+        flush();
+        curObj = line;
+      }
+    }
+    flush();
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -1963,6 +2089,7 @@
     gsr: parseGsr,
     gst: parseGsr,
     фортренд: parseGsr,
+    табия: parseTabia,
   };
 
   global.CVZ_NEED = {
@@ -1978,6 +2105,7 @@
     parseXxHelper,
     parseKnk,
     parseGsr,
+    parseTabia,
     setAliases,
     norm,
   };
