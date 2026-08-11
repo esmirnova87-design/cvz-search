@@ -944,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК, GST GSR Фортренд, Табия).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco, ХХЕЛПЕР, КНК, GST GSR Фортренд, Табия, Астрея).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -2074,6 +2074,176 @@
     return items;
   }
 
+  /**
+   * Астрея: блоки 💊/📦 объект + Пол: NМ/NЖ + сем место + роли «Комплектовщик — 5 М».
+   * Оплата/график/СБ — игнор.
+   */
+  function parseAstreya(text) {
+    const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+    const items = [];
+    let title = "";
+    let m = 0;
+    let zh = 0;
+    let sp = 0;
+    let hasM = false;
+    let hasZh = false;
+    let hasSp = false;
+    let roles = [];
+    let genderM = 0;
+    let genderZh = 0;
+    let hasGender = false;
+    let roleM = 0;
+    let roleZh = 0;
+    let hasRoleCount = false;
+    let hasMainRoleCount = false;
+
+    function reset() {
+      title = "";
+      m = zh = sp = 0;
+      hasM = hasZh = hasSp = false;
+      roles = [];
+      genderM = genderZh = 0;
+      hasGender = false;
+      roleM = roleZh = 0;
+      hasRoleCount = false;
+      hasMainRoleCount = false;
+    }
+
+    function flush() {
+      if (!title) {
+        reset();
+        return;
+      }
+      let fm = 0;
+      let fzh = 0;
+      let fHasM = false;
+      let fHasZh = false;
+      if (hasMainRoleCount) {
+        fm = roleM;
+        fzh = roleZh;
+        fHasM = roleM > 0;
+        fHasZh = roleZh > 0;
+      } else if (hasGender) {
+        fm = genderM + roleM;
+        fzh = genderZh + roleZh;
+        fHasM = genderM + roleM > 0;
+        fHasZh = genderZh + roleZh > 0;
+      } else if (hasRoleCount) {
+        fm = roleM;
+        fzh = roleZh;
+        fHasM = roleM > 0;
+        fHasZh = roleZh > 0;
+      }
+      if (hasSp) {
+        fm += sp;
+        fzh += sp;
+        fHasM = true;
+        fHasZh = true;
+      }
+      if (!fHasM && !fHasZh && !hasSp) {
+        reset();
+        return;
+      }
+      const need = finalizeSp({
+        m: fm,
+        zh: fzh,
+        sp,
+        hasM: fHasM,
+        hasZh: fHasZh,
+        hasSp,
+        roles,
+      });
+      items.push({
+        raw: title + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
+        place: title,
+        project: title,
+        vacancy: "",
+        location: title,
+        ...need,
+        roles,
+      });
+      reset();
+    }
+
+    for (const line0 of lines) {
+      const line = String(line0 || "").trim();
+      if (!line) continue;
+      if (/^https?:\/\//i.test(line)) continue;
+
+      const isHeader =
+        /[💊📦]/.test(line) ||
+        (/^(?:цв\s*протек|бристол|все\s*инструмент|холодильник)/i.test(line) && line.length < 80);
+
+      if (isHeader) {
+        flush();
+        title = line
+          .replace(/[💊📦📲⏰👫🌍🎂🔧🍲🛡️📱🚗📝💰]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        continue;
+      }
+      if (!title) continue;
+
+      if (/сем\.?\s*мест|семейн/i.test(line)) {
+        const fm = line.match(/(\d+)\s*сем/i);
+        if (fm) {
+          sp += parseInt(fm[1], 10);
+          hasSp = true;
+        } else if (/сем/i.test(line)) {
+          sp += 1;
+          hasSp = true;
+        }
+        continue;
+      }
+
+      if (/пол\s*:/i.test(line) || /👫/.test(line) || /\d+\s*[мжМЖ]\s*\/\s*\d+\s*[мжМЖ]/i.test(line)) {
+        let t = line
+          .replace(/пол\s*:/gi, " ")
+          .replace(/и\s+\d+\s*сем[^\n]*/gi, " ")
+          .replace(/\//g, " ");
+        const c = parseCountBlock(t);
+        if (c.hasM || c.hasZh) {
+          genderM += c.m;
+          genderZh += c.zh;
+          hasGender = true;
+        }
+        continue;
+      }
+
+      const roleHit = line.match(
+        /(комплектовщик\w*|грузчик\w*|водитель\w*|стикеровщик\w*|сборщик\w*)[^\n]*?(\d+)\s*([мжМЖmfw])\b/i
+      );
+      if (roleHit) {
+        const n = parseInt(roleHit[2], 10);
+        const g = roleHit[3].toUpperCase();
+        const main = !/водитель/i.test(roleHit[1]);
+        if (/[жf]/i.test(g)) {
+          roleZh += n;
+          hasRoleCount = true;
+          if (main) hasMainRoleCount = true;
+          roles.push({ count: n, title: roleHit[1], gender: "zh" });
+        } else {
+          roleM += n;
+          hasRoleCount = true;
+          if (main) hasMainRoleCount = true;
+          roles.push({ count: n, title: roleHit[1], gender: "m" });
+        }
+        continue;
+      }
+
+      const driverOnly = line.match(/водитель[^\n]*?[-–—]\s*(\d+)\s*$/i) || line.match(/🚗\s*водитель\s*[-–—]?\s*(\d+)/i);
+      if (driverOnly) {
+        const n = parseInt(driverOnly[1], 10);
+        roleM += n;
+        hasRoleCount = true;
+        roles.push({ count: n, title: "водитель", gender: "m" });
+        continue;
+      }
+    }
+    flush();
+    return items;
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -2090,6 +2260,7 @@
     gst: parseGsr,
     фортренд: parseGsr,
     табия: parseTabia,
+    астрея: parseAstreya,
   };
 
   global.CVZ_NEED = {
@@ -2106,6 +2277,7 @@
     parseKnk,
     parseGsr,
     parseTabia,
+    parseAstreya,
     setAliases,
     norm,
   };
