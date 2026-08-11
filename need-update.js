@@ -397,7 +397,17 @@
       const t = String(cell || "").trim();
       if (/^[мm]$/i.test(t) || /^муж/i.test(t)) return "m";
       if (/^[жf]$/i.test(t) || /^жен/i.test(t)) return "zh";
+      // «1сп», «сп», «1 сем.пар»
+      if (/^\d*\s*сп\b/i.test(t) || /сем\.?\s*пар/i.test(t) || /семейн/i.test(t)) return "sp";
       return "";
+    }
+
+    function coupleCount(cell) {
+      const t = String(cell || "").trim();
+      const m = t.match(/(\d+)\s*сп\b/i) || t.match(/(\d+)\s*сем/i);
+      if (m) return parseInt(m[1], 10);
+      if (/^сп\b/i.test(t) || /сем/i.test(t)) return 1;
+      return 0;
     }
 
     function needNum(cell) {
@@ -486,24 +496,37 @@
         });
         continue;
       }
-      if (!object || !g || !n) continue;
+      if (!object || !g) continue;
       if (/потребност|территориал|гражданств/i.test(object)) continue;
 
       const counts = { m: 0, zh: 0, sp: 0, hasM: false, hasZh: false, hasSp: false, roles: [] };
-      if (g === "m") {
+      if (g === "sp") {
+        // «1сп» в столбце Пол: число пар из пола (не из «потребность» — там часто 2 человека)
+        const pairs = coupleCount(genderCell) || 1;
+        counts.sp = pairs;
+        counts.hasSp = true;
+        counts.m = pairs;
+        counts.zh = pairs;
+        counts.hasM = true;
+        counts.hasZh = true;
+      } else if (!n) {
+        continue;
+      } else if (g === "m") {
         counts.m = n;
         counts.hasM = true;
       } else {
         counts.zh = n;
         counts.hasZh = true;
       }
-      if (vacancy) {
+      if (vacancy && g !== "sp") {
         counts.roles.push({ count: n, title: vacancy, gender: g === "m" ? "m" : "zh" });
       }
       const need = finalizeSp(counts);
       const place = loc ? object + ", " + loc : object;
+      const tag =
+        g === "sp" ? counts.sp + "СП" : n + (g === "m" ? "М" : "Ж");
       items.push({
-        raw: [object, n + (g === "m" ? "М" : "Ж"), vacancy, loc].filter(Boolean).join(" | "),
+        raw: [object, tag, vacancy, loc].filter(Boolean).join(" | "),
         place,
         project: object,
         vacancy: String(vacancy || "").replace(/\s+/g, " ").trim(),
@@ -921,7 +944,7 @@
     if (!parser) {
       return {
         ok: false,
-        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff).`],
+        notes: [`Формат «${customer}» ещё не подключён (есть PersonalResourse, ЯППИ, НЦЗ, ЭкоСтафф, ProClever, Lime staff, Lerteco).`],
         updates: [],
         ambiguous: [],
         missing: [],
@@ -1401,6 +1424,126 @@
     return items;
   }
 
+  /**
+   * Lerteco: Excel «2026 заявка».
+   * Берём только строки, где столбец Вахта = «да» (местные пока не ведём).
+   * Колонки: объект | должность | потребность | … | вахта=да | …
+   * Потребность: число или «N мужчин» / «N женщин».
+   */
+  function parseLerteco(text) {
+    const raw = String(text || "").replace(/\r\n/g, "\n");
+    const lines = raw.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim());
+    const items = [];
+    let header = null;
+
+    function splitCols(line) {
+      if (line.includes("\t")) return line.split("\t").map((c) => c.replace(/\s+/g, " ").trim());
+      return line.split(/\s{2,}|\s*\|\s*/).map((c) => c.replace(/\s+/g, " ").trim()).filter(Boolean);
+    }
+
+    function parseNeedGender(needCell, job) {
+      let text = String(needCell || "");
+      let m = 0;
+      let zh = 0;
+      let hasM = false;
+      let hasZh = false;
+      text.replace(/(\d+)\s*(мужчин\w*|муж\b|жен\w*|девуш\w*)/gi, (_, n, g) => {
+        const num = parseInt(n, 10);
+        if (!(num > 0)) return " ";
+        if (/^жен|^девуш/i.test(g)) {
+          zh += num;
+          hasZh = true;
+        } else {
+          m += num;
+          hasM = true;
+        }
+        return " ";
+      });
+      if (!hasM && !hasZh) {
+        const nm = String(needCell || "").replace(/\s/g, "").match(/^(\d+)/);
+        if (nm) {
+          const num = parseInt(nm[1], 10);
+          if (num > 0) {
+            const jl = String(job || "").toLowerCase();
+            if (/стикеровщиц|упаковщиц|уборщиц|женщин/.test(jl)) {
+              zh = num;
+              hasZh = true;
+            } else {
+              m = num;
+              hasM = true;
+            }
+          }
+        }
+      }
+      return finalizeSp({ m, zh, sp: 0, hasM, hasZh, hasSp: false, roles: [] });
+    }
+
+    for (const line of lines) {
+      const cols = splitCols(line);
+      if (!cols.length) continue;
+      const njoin = norm(cols.join(" "));
+      if (!header && /назван|объект/.test(njoin) && /потребност/.test(njoin)) {
+        header = cols.map((c) => norm(c));
+        continue;
+      }
+
+      let object = "";
+      let job = "";
+      let needCell = "";
+      let vahta = "";
+      let addr = "";
+
+      if (header) {
+        const io = colIdx(header, ["назван", "объект"]);
+        const ij = colIdx(header, ["должност"]);
+        const ineed = colIdx(header, ["потребност"]);
+        const iv = colIdx(header, ["вахта"]);
+        const ia = colIdx(header, ["адрес"]);
+        object = io >= 0 ? cols[io] || "" : cols[0] || "";
+        job = ij >= 0 ? cols[ij] || "" : "";
+        needCell = ineed >= 0 ? cols[ineed] || "" : "";
+        vahta = iv >= 0 ? cols[iv] || "" : "";
+        addr = ia >= 0 ? cols[ia] || "" : "";
+      } else {
+        object = cols[0] || "";
+        job = cols[1] || "";
+        needCell = cols[2] || "";
+        vahta = cols[3] || cols[4] || "";
+        addr = cols[5] || "";
+      }
+
+      // строго вахта=да (не «нет», не пусто)
+      const v = norm(vahta);
+      if (v && v !== "да" && !/^да\b/.test(v)) continue;
+      if (!v) {
+        // без колонки вахты в короткой вставке — не берём (риск местных)
+        if (header && colIdx(header, ["вахта"]) >= 0) continue;
+      }
+
+      if (!object || /назван|объект/.test(norm(object))) continue;
+      const need = parseNeedGender(needCell, job);
+      // даже 0 — сигналим объектом без цифр? для очистки нужен полный список вахта=да
+      // items с 0 need: place only, m/zh empty — matchItems then clear others
+      const place = addr ? object.split(/\n/)[0].trim() + ", " + addr.split(",")[0] : object.split(/\n/)[0].trim();
+      items.push({
+        raw: object + " | " + job + " | " + needCell,
+        place,
+        project: object.split(/\n/)[0].trim(),
+        vacancy: String(job || "").replace(/\s+/g, " ").trim(),
+        location: addr,
+        m: need.m,
+        zh: need.zh,
+        sp: need.sp,
+        roles: [],
+        zeroNeed: !need.m && !need.zh,
+      });
+    }
+
+    // убрать нулевые из «заявка» счёта для матча цифр — но оставить объекты с need
+    // для очистки: объекты с need>0 в used; zeroNeed не пишем в updates как set
+    return items.filter((it) => !it.zeroNeed);
+  }
+
   const customerParsers = {
     personalresourse: parsePersonalResourse,
     яппи: parseYappi,
@@ -1409,6 +1552,7 @@
     proclever: parseProClever,
     "lime staff": parseLimeStaff,
     limestaff: parseLimeStaff,
+    lerteco: parseLerteco,
   };
 
   global.CVZ_NEED = {
@@ -1420,6 +1564,7 @@
     parseEcoStaff,
     parseProClever,
     parseLimeStaff,
+    parseLerteco,
     setAliases,
     norm,
   };
