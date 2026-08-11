@@ -1250,16 +1250,18 @@
     }
 
     function flush() {
-      if (!title || (!hasM && !hasZh && !hasSp)) {
+      // без 🔷 тоже можно: остались 📍 + NМ/NЖ (обрезанный копипаст / хвост OCR)
+      if ((!title && !loc) || (!hasM && !hasZh && !hasSp)) {
         reset();
         return;
       }
       const need = finalizeSp({ m, zh, sp, hasM, hasZh, hasSp, roles });
-      const place = loc ? title + ", " + loc : title;
+      const head = title || vacancy || "";
+      const place = head && loc ? head + ", " + loc : head || loc;
       items.push({
         raw: place + " " + (need.m || "0") + "М/" + (need.zh || "0") + "Ж",
         place,
-        project: title,
+        project: title || head,
         vacancy,
         location: loc,
         ...need,
@@ -1282,6 +1284,8 @@
         continue;
       }
       if (/📍/.test(line)) {
+        // новый адрес без 🔷 — закрываем предыдущий набор цифр
+        if (title || hasM || hasZh || hasSp) flush();
         loc = line.replace(/📍/g, "").replace(/\s+/g, " ").trim();
         continue;
       }
