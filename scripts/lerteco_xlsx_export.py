@@ -76,25 +76,27 @@ def parse_need_cell(need, requirements: str = "", job: str = "") -> dict:
     }
 
 
-def load_vahta_rows(xlsx: Path):
-    wb = openpyxl.load_workbook(xlsx, data_only=True)
-    ws = wb["2026 заявка"]
+def load_vahta_rows_from_values(rows_2d: list[list], start_row: int = 2) -> list[dict]:
+    """Parse rows from Sheets API / openpyxl grid (0-based list of lists, col A = index 0)."""
     out = []
-    for r in range(2, ws.max_row + 1):
-        vahta = str(ws.cell(r, 5).value or "").strip().lower()
+    for i, row in enumerate(rows_2d):
+        def cell(idx):
+            return row[idx] if idx < len(row) else None
+
+        vahta = str(cell(4) or "").strip().lower()  # E
         if vahta != "да":
             continue
-        obj = str(ws.cell(r, 1).value or "").strip()
-        job = str(ws.cell(r, 2).value or "").strip()
-        need = ws.cell(r, 3).value
-        req = str(ws.cell(r, 11).value or "")
-        addr = str(ws.cell(r, 8).value or "").strip()
+        obj = str(cell(0) or "").strip()
+        job = str(cell(1) or "").strip()
+        need = cell(2)
+        req = str(cell(10) or "")  # K
+        addr = str(cell(7) or "").strip()  # H
         if not obj:
             continue
         parsed = parse_need_cell(need, req, job)
         out.append(
             {
-                "excelRow": r,
+                "excelRow": start_row + i,
                 "object": obj,
                 "job": job,
                 "addr": addr,
@@ -103,6 +105,38 @@ def load_vahta_rows(xlsx: Path):
             }
         )
     return out
+
+
+def load_vahta_rows(xlsx: Path):
+    wb = openpyxl.load_workbook(xlsx, data_only=True)
+    ws = wb["2026 заявка"]
+    grid = []
+    for r in range(2, ws.max_row + 1):
+        grid.append([ws.cell(r, c).value for c in range(1, 12)])
+    return load_vahta_rows_from_values(grid, start_row=2)
+
+
+LERTECO_SHEET_ID = "1NAgklIGANNrMNTeUkz8iRsNij9Cu91SVc5bXgEuwboc"
+
+
+def load_vahta_rows_from_google(spreadsheet_id: str = LERTECO_SHEET_ID) -> list[dict]:
+    """Read лист «2026 заявка» via service account (Вахта=да)."""
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+
+    sa = ROOT / "secrets" / "google-service-account.json"
+    creds = service_account.Credentials.from_service_account_file(
+        str(sa), scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    )
+    svc = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    data = (
+        svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range="'2026 заявка'!A2:K")
+        .execute()
+        .get("values", [])
+    )
+    return load_vahta_rows_from_values(data, start_row=2)
 
 
 def to_paste_text(rows) -> str:
@@ -131,10 +165,14 @@ def to_paste_text(rows) -> str:
 
 
 def main():
-    xlsx = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(
-        r"c:\Users\user\Downloads\Заявка на персонал Lerteco.xlsx"
-    )
-    rows = load_vahta_rows(xlsx)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    use_file = bool(args) and args[0].endswith((".xlsx", ".xlsm"))
+    if use_file:
+        print("source: file", args[0])
+        rows = load_vahta_rows(Path(args[0]))
+    else:
+        print("source: Google Sheet", LERTECO_SHEET_ID)
+        rows = load_vahta_rows_from_google()
     active = [r for r in rows if r["has"]]
     print(f"vahta=да: {len(rows)}, with need: {len(active)}")
     for r in active:
