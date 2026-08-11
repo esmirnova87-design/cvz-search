@@ -1332,8 +1332,14 @@
     let loc = "";
 
     function headerLoc(h) {
-      const m = String(h || "").match(/\(([^)]+)\)/);
-      return m ? m[1].replace(/^г\.?\s*/i, "").trim() : "";
+      // предпочитаем «(г. Город)» / короткое имя города, не «(со всеми документами)»
+      const m =
+        String(h || "").match(/\(г\.?\s*([^)]+)\)/i) ||
+        String(h || "").match(/\(([^)]{2,40})\)/);
+      if (!m) return "";
+      const city = m[1].replace(/^г\.?\s*/i, "").trim();
+      if (/документ|открыт|сз|снг|рф|и\s+рб/i.test(city)) return "";
+      return city;
     }
 
     function pushItem(place, vacancy, counts) {
@@ -1354,8 +1360,8 @@
       let t = line.replace(/^[-–—•*]\s*/, "").trim();
       if (!t || /^🔺/.test(t)) return null;
       t = t
-        .replace(/мужчин[аы]?|мужик\w*/gi, "М")
-        .replace(/женщин[аы]?|девушек\w*/gi, "Ж");
+        .replace(/мужчин[аы]?|мужик\w*|мужчин\w*/gi, "М")
+        .replace(/женжин\w*|женщин[аы]?|девушек\w*|женщин\w*/gi, "Ж");
       // «20 грузчиков» / «11 упаковщиц» / «10 М с опытом оператора»
       const roleM = t.match(/(\d+)\s*(грузчик\w*|оператор\w*|водитель\w*|штабелер\w*|комплектовщик\w*)/i);
       const roleZh = t.match(/(\d+)\s*(упаковщиц\w*|маркировщиц\w*|уборщиц\w*)/i);
@@ -1402,6 +1408,17 @@
       return { vacancy, counts: c };
     }
 
+    function isObjectHeader(line) {
+      if (/^[-–—•*🔺]/.test(line)) return false;
+      if (/^заселен|ставка|питани|возраст|граждан|работ[аы]\s+на\s+ногах/i.test(line)) return false;
+      if (line.length < 5) return false;
+      // СНЕКИ (г. Химки) / МАРС (г. Домодедово) / БИГ косметика (Троицк)
+      if (/\(г\.?\s*[^)]+\)/i.test(line)) return true;
+      if (/^(снек|марс|биг|агро)/i.test(line)) return true;
+      if (/производств|склад|косметич|завод|мясн/i.test(line) && /\([^)]{2,40}\)/.test(line)) return true;
+      return false;
+    }
+
     for (const line0 of lines) {
       const line = String(line0 || "").trim();
       if (!line) continue;
@@ -1409,14 +1426,12 @@
         continue;
       }
       if (/^🔺/.test(line)) continue;
+      if (/^заселен/i.test(line)) continue;
 
-      // заголовок объекта (не буллет)
-      if (!/^[-–—•*]/.test(line) && !/^\d+\s/.test(line) && line.length > 8) {
-        if (/производств|склад|марс|биг|агро|косметич|завод/i.test(line) || /\([^)]+\)/.test(line)) {
-          header = line.replace(/\s+/g, " ").trim();
-          loc = headerLoc(header);
-          continue;
-        }
+      if (isObjectHeader(line)) {
+        header = line.replace(/\s+/g, " ").trim();
+        loc = headerLoc(header);
+        continue;
       }
 
       if (!header) continue;
@@ -1424,8 +1439,9 @@
 
       const parsed = parseBullet(line);
       if (!parsed) continue;
-      const place = loc ? header + ", " + loc : header;
-      // для операторов Балашихи — vacancy явный
+      // place: короткое имя объекта + город (без простыни про документы)
+      const shortName = header.split("(")[0].trim() || header;
+      const place = loc ? shortName + ", " + loc : shortName;
       pushItem(place, parsed.vacancy, parsed.counts);
     }
     return items;
