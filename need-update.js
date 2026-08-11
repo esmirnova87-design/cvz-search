@@ -1284,8 +1284,8 @@
         continue;
       }
       if (/📍/.test(line)) {
-        // новый адрес без 🔷 — закрываем предыдущий набор цифр
-        if (title || hasM || hasZh || hasSp) flush();
+        // новый блок по адресу только если уже есть цифры (не сбрасывать title после 🔷)
+        if (hasM || hasZh || hasSp) flush();
         loc = line.replace(/📍/g, "").replace(/\s+/g, " ").trim();
         continue;
       }
@@ -1294,7 +1294,8 @@
         continue;
       }
 
-      if (/^[👉🍽❗️]/.test(line)) continue;
+      // важно: /u — иначе суррогаты 👉 совпадают с 👨 и строки «👨 1М» отбрасываются
+      if (/^(👉|🍽|❗️|❗)/u.test(line)) continue;
       if (/питани|вахта|фикс|сделка/i.test(line) && !/\d+\s*[мжМЖmfw]/i.test(line)) continue;
 
       if (/\d+\s*[мжМЖmfw]/i.test(line) || /\d+\s*семейн/i.test(line)) {
