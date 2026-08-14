@@ -166,6 +166,16 @@
       border-color: rgba(241,28,35,.55);
       box-shadow: 0 0 0 3px rgba(241,28,35,.12);
     }
+    .max-card-layout {
+      display: grid; gap: 16px;
+    }
+    @media (min-width: 800px) {
+      .max-card-layout { grid-template-columns: 1fr 320px; align-items: start; }
+    }
+    #maxCardCanvas {
+      width: 100%; height: auto; border-radius: 12px;
+      border: 1px solid var(--line); background: #051828; display: block;
+    }
   </style>
 </head>
 <body>
@@ -242,6 +252,7 @@
   <script src="need-update.js?v=26"></script>
   <script src="need-ocr.js?v=3"></script>
   <script src="sheets-write.js?v=1"></script>
+  <script src="max-card.js?v=1"></script>
   <script>
     const KEY = "cvz_lk_v1";
     const PARTNERS_KEY = "cvz_partners_v1";
@@ -444,17 +455,20 @@
           <button type="button" class="tab active" data-asub="partners">Партнёры</button>
           <button type="button" class="tab" data-asub="approve">Апрув фрилансера</button>
           <button type="button" class="tab" data-asub="update">Обновить потребность</button>
+          <button type="button" class="tab" data-asub="card">Карточка MAX</button>
         </div>
         <div id="asub-partners"></div>
         <div id="asub-approve" class="hidden"></div>
-        <div id="asub-update" class="hidden"></div>`;
+        <div id="asub-update" class="hidden"></div>
+        <div id="asub-card" class="hidden"></div>`;
 
       const partnersBox = document.getElementById("asub-partners");
       const approveBox = document.getElementById("asub-approve");
       const updateBox = document.getElementById("asub-update");
+      const cardBox = document.getElementById("asub-card");
 
       function setAdminSub(name) {
-        ["partners", "approve", "update"].forEach((k) => {
+        ["partners", "approve", "update", "card"].forEach((k) => {
           document.getElementById("asub-" + k).classList.toggle("hidden", k !== name);
         });
         el.querySelectorAll("#adminSubTabs .tab").forEach((b) => b.classList.toggle("active", b.dataset.asub === name));
@@ -487,6 +501,68 @@
           <button type="button" class="btn btn-ghost" id="flRevokeBtn">Снять</button>
         </div>
         <p id="flApproveStatus" class="muted"></p>`;
+
+      cardBox.innerHTML = `
+        <h2>Карточка для MAX</h2>
+        <p class="muted">Вставьте текст из столбца B (📍 / ✅ / 🔥). Заказчик и адрес на картинку не попадают.</p>
+        <div class="max-card-layout">
+          <div>
+            <div class="field">
+              <label class="lbl" for="maxCardText">Текст для МАКС</label>
+              <textarea id="maxCardText" style="min-height:160px" placeholder="📍Производство строительных смесей, Тульская, Ясногорск&#10;✅М разнорабочий/грузчик&#10;🔥3800"></textarea>
+            </div>
+            <div class="row">
+              <button type="button" class="btn btn-primary" id="maxCardDraw">Собрать</button>
+              <button type="button" class="btn btn-ghost" id="maxCardDl">Скачать PNG</button>
+              <button type="button" class="btn btn-ghost" id="maxCardCopy">Копировать картинку</button>
+            </div>
+            <p id="maxCardStatus" class="muted" style="margin-top:10px"></p>
+          </div>
+          <div>
+            <canvas id="maxCardCanvas" width="1080" height="1350"></canvas>
+          </div>
+        </div>`;
+
+      const maxCanvas = document.getElementById("maxCardCanvas");
+      const maxText = document.getElementById("maxCardText");
+      const maxStatus = document.getElementById("maxCardStatus");
+      let lastCard = null;
+
+      async function redrawMaxCard() {
+        if (!globalThis.CVZ_MAX_CARD) {
+          maxStatus.textContent = "Скрипт карточки не загрузился — обновите страницу.";
+          return;
+        }
+        lastCard = await CVZ_MAX_CARD.renderToCanvas(maxCanvas, maxText.value);
+        const bits = [lastCard.title, lastCard.place, lastCard.need, lastCard.rate].filter(Boolean);
+        maxStatus.textContent = bits.length ? bits.join(" · ") : "Не разобрала 📍/✅/🔥 — проверьте текст.";
+      }
+      document.getElementById("maxCardDraw").onclick = () => redrawMaxCard().catch((e) => {
+        maxStatus.textContent = e.message || String(e);
+      });
+      document.getElementById("maxCardDl").onclick = async () => {
+        try {
+          if (!lastCard) await redrawMaxCard();
+          await CVZ_MAX_CARD.downloadPng(maxCanvas, CVZ_MAX_CARD.fileNameFrom(lastCard || {}));
+          maxStatus.textContent = "PNG скачан.";
+        } catch (e) {
+          maxStatus.textContent = e.message || String(e);
+        }
+      };
+      document.getElementById("maxCardCopy").onclick = async () => {
+        try {
+          if (!lastCard) await redrawMaxCard();
+          await CVZ_MAX_CARD.copyPng(maxCanvas);
+          maxStatus.textContent = "Картинка в буфере — можно вставить в MAX.";
+        } catch (e) {
+          maxStatus.textContent = e.message || String(e);
+        }
+      };
+      maxText.addEventListener("input", () => {
+        clearTimeout(maxText._t);
+        maxText._t = setTimeout(() => redrawMaxCard().catch(() => {}), 250);
+      });
+      redrawMaxCard().catch(() => {});
 
       // --- Обновить потребность ---
       const CUSTOMERS_FALLBACK = [
