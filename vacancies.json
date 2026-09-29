@@ -13986,7 +13986,7 @@
         "комплектовщик"
       ],
       "gender_m": true,
-      "gender_f": false,
+      "gender_f": true,
       "ot": 30,
       "short_shift": false,
       "travel_comp": true,
