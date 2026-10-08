@@ -1,0 +1,14 @@
+{
+  "name": "ЦВЗ — cvz-search",
+  "install": "pip install --break-system-packages openpyxl google-auth google-api-python-client",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000",
+      "description": "Статичный дев-сервер витрины ЦВЗ. Открой http://localhost:8000/ (index.html — поиск, account.html — ЛК)."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 8000 }
+  ]
+}
